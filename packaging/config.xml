@@ -1,0 +1,48 @@
+<?xml version='1.0' encoding='utf-8'?>
+<widget id="br.com.x4studio.pdv2g2m" version="1.0.0" xmlns="http://www.w3.org/ns/widgets" xmlns:cdv="http://cordova.apache.org/ns/1.0">
+    <name>PDV 2G2M</name>
+    <description>Sistema de Ponto de Venda e Autoatendimento para refeitório escolar com gestão administrativa, relatórios e emissão de cupons.</description>
+    <author email="arthur.moreira@2g2m.com.br" href="https://2g2m.com.br">X4 Studio / 2G2M</author>
+
+    <content src="index.html" />
+
+    <access origin="*" />
+    <allow-intent href="http://*/*" />
+    <allow-intent href="https://*/*" />
+    <allow-navigation href="*" />
+
+    <preference name="DisallowOverscroll" value="true" />
+    <preference name="Orientation" value="default" />
+    <preference name="Fullscreen" value="false" />
+    <preference name="AndroidPersistentFileLocation" value="Compatibility" />
+    <preference name="android-minSdkVersion" value="24" />
+    <preference name="android-targetSdkVersion" value="34" />
+    <preference name="AndroidXEnabled" value="true" />
+
+    <platform name="android">
+        <allow-intent href="market:*" />
+        <preference name="AndroidLaunchMode" value="singleTask" />
+    </platform>
+
+    <!-- Plugin nativo para abrir o diálogo de impressão do Android (Print Framework).
+         TEMPORÁRIO: usado enquanto o SDK/AIDL oficial da Gertec para o SK210
+         não está integrado — ver printerService.ts para detalhes. -->
+    <plugin name="cordova-plugin-printer" spec="~0.8.0" />
+
+    <!--
+        ATENÇÃO — ÍCONES:
+        Substitua os arquivos abaixo por ícones reais do 2G2M (fundo vermelho,
+        conforme a identidade visual) antes do build de produção/release.
+        Sem <icon>, o VoltBuilder usa um ícone genérico do Cordova.
+        Tamanhos mínimos recomendados (Android):
+        ldpi 36x36, mdpi 48x48, hdpi 72x72, xhdpi 96x96, xxhdpi 144x144, xxxhdpi 192x192
+    -->
+    <!--
+    <icon density="ldpi" src="res/icon/android/ldpi.png" />
+    <icon density="mdpi" src="res/icon/android/mdpi.png" />
+    <icon density="hdpi" src="res/icon/android/hdpi.png" />
+    <icon density="xhdpi" src="res/icon/android/xhdpi.png" />
+    <icon density="xxhdpi" src="res/icon/android/xxhdpi.png" />
+    <icon density="xxxhdpi" src="res/icon/android/xxxhdpi.png" />
+    -->
+</widget>

@@ -1,0 +1,380 @@
+import React, { useState, useEffect } from 'react';
+import { Venda } from '../../types';
+import { getAllVendas } from '../../db/indexedDB';
+import * as XLSX from 'xlsx';
+import { 
+  FileCheck, 
+  Printer, 
+  Download, 
+  Calendar, 
+  DollarSign, 
+  FileSpreadsheet,
+  Building
+} from 'lucide-react';
+
+export const TabRecuperacaoDescontos: React.FC = () => {
+  const [vendas, setVendas] = useState<Venda[]>([]);
+  const [dataInicio, setDataInicio] = useState<string>('');
+  const [dataFim, setDataFim] = useState<string>('');
+
+  useEffect(() => {
+    loadVendas();
+  }, []);
+
+  const loadVendas = async () => {
+    try {
+      const list = await getAllVendas();
+      setVendas(list);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // Filter Sales by Date Range
+  const vendasFiltradas = vendas.filter((v) => {
+    if (!v || !v.dataHora) return false;
+    const dataVendaYMD = v.dataHora.split('T')[0];
+    if (dataInicio && dataVendaYMD < dataInicio) return false;
+    if (dataFim && dataVendaYMD > dataFim) return false;
+    return true;
+  });
+
+  // Calculate Grouping by Discount Rate
+  const agrupamentoPorPlano: Record<
+    string,
+    {
+      planoCodigo: string;
+      percentualDesconto: number;
+      quantidade: number;
+      valorBaseTotal: number;
+      valorSubsidioTotal: number;
+    }
+  > = {};
+
+  let totalGeralSubsidio = 0;
+  let totalGeralAtendimentos = 0;
+  let totalGeralBruto = 0;
+
+  for (const v of vendasFiltradas) {
+    const key = `${v.planoCodigo}_${v.percentualDesconto}`;
+    if (!agrupamentoPorPlano[key]) {
+      agrupamentoPorPlano[key] = {
+        planoCodigo: v.planoCodigo,
+        percentualDesconto: v.percentualDesconto || 0,
+        quantidade: 0,
+        valorBaseTotal: 0,
+        valorSubsidioTotal: 0,
+      };
+    }
+
+    agrupamentoPorPlano[key].quantidade += 1;
+    agrupamentoPorPlano[key].valorBaseTotal += v.precoBase || 0;
+    agrupamentoPorPlano[key].valorSubsidioTotal += v.valorSubsidio || 0;
+
+    totalGeralSubsidio += v.valorSubsidio || 0;
+    totalGeralAtendimentos += 1;
+    totalGeralBruto += v.precoBase || 0;
+  }
+
+  const listaPlanosSubsidio = Object.values(agrupamentoPorPlano).sort(
+    (a, b) => b.percentualDesconto - a.percentualDesconto
+  );
+
+  // Print Document
+  const handlePrintReport = () => {
+    window.print();
+  };
+
+  // Export XLSX Document
+  const handleExportXlsx = () => {
+    // 1. Detailed Sales Sheet (Contains ID Venda and Matrícula Aluno)
+    const detalhamentoData = vendasFiltradas.map((v) => ({
+      'ID Venda': v.id || '',
+      'Matrícula Aluno': v.alunoMatricula || '',
+      'Nome do Aluno': v.alunoNome || '',
+      'Curso': v.alunoCurso || '',
+      'Data e Hora': v.dataHora ? new Date(v.dataHora).toLocaleString('pt-BR') : '',
+      'Serviço': v.servicoNome || '',
+      'Código do Plano': v.planoCodigo || '',
+      'Percentual Desconto': `${v.percentualDesconto}%`,
+      'Valor Base (R$)': v.precoBase || 0,
+      'Valor Cobrado Aluno (R$)': v.valorCobradoAluno || 0,
+      'Valor Reembolso Subsídio (R$)': v.valorSubsidio || 0,
+    }));
+
+    // 2. Summary by Plan Sheet
+    const resumoData = listaPlanosSubsidio.map((p) => ({
+      'Código do Plano': p.planoCodigo,
+      'Percentual Desconto (%)': `${p.percentualDesconto}%`,
+      'Quantidade Refeições': p.quantidade,
+      'Valor Base Acumulado (R$)': p.valorBaseTotal,
+      'Total Subsídio Reembolso (R$)': p.valorSubsidioTotal,
+    }));
+
+    const workbook = XLSX.utils.book_new();
+
+    const wsDetalhamento = XLSX.utils.json_to_sheet(detalhamentoData);
+    XLSX.utils.book_append_sheet(workbook, wsDetalhamento, 'Detalhamento_Vendas');
+
+    const wsResumo = XLSX.utils.json_to_sheet(resumoData);
+    XLSX.utils.book_append_sheet(workbook, wsResumo, 'Consolidado_Planos');
+
+    XLSX.writeFile(
+      workbook,
+      `Solicitacao_Recuperacao_Descontos_2G2M_${new Date().toISOString().split('T')[0]}.xlsx`
+    );
+  };
+
+  return (
+    <div className="space-y-6">
+      
+      {/* Top Banner */}
+      <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div>
+          <h3 className="text-xl font-black text-gray-900 flex items-center gap-2">
+            <FileCheck className="w-6 h-6 text-red-600" />
+            <span>Solicitação de Recuperação de Descontos</span>
+          </h3>
+          <p className="text-xs text-gray-500 font-medium mt-0.5">
+            Relatório oficial para cobrança/reembolso junto ao contratante referente aos subsídios concedidos
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2 w-full md:w-auto">
+          <button
+            onClick={handlePrintReport}
+            className="flex items-center gap-1.5 bg-gray-900 hover:bg-black text-white font-extrabold px-4 py-2.5 rounded-xl text-xs transition-all shadow"
+          >
+            <Printer className="w-4 h-4 text-red-500" />
+            <span>Imprimir Relatório</span>
+          </button>
+
+          <button
+            onClick={handleExportXlsx}
+            className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-4 py-2.5 rounded-xl text-xs transition-all shadow"
+          >
+            <Download className="w-4 h-4" />
+            <span>Exportar Excel</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Date Filter Bar */}
+      <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-sm flex flex-wrap items-center gap-4 text-xs font-semibold text-gray-700">
+        <div className="flex items-center gap-2">
+          <Calendar className="w-4 h-4 text-red-600" />
+          <span>Período de Referência:</span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <span>De:</span>
+          <input
+            type="date"
+            value={dataInicio}
+            onChange={(e) => setDataInicio(e.target.value)}
+            className="bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1 text-xs font-bold"
+          />
+        </div>
+
+        <div className="flex items-center gap-2">
+          <span>Até:</span>
+          <input
+            type="date"
+            value={dataFim}
+            onChange={(e) => setDataFim(e.target.value)}
+            className="bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1 text-xs font-bold"
+          />
+        </div>
+
+        {(dataInicio || dataFim) && (
+          <button
+            onClick={() => {
+              setDataInicio('');
+              setDataFim('');
+            }}
+            className="text-red-600 text-[11px] font-bold underline ml-auto"
+          >
+            Limpar Filtros de Data
+          </button>
+        )}
+      </div>
+
+      {/* Printable Report Document Card */}
+      <div className="bg-white rounded-3xl border-2 border-gray-200 p-8 shadow-sm space-y-6 print:border-none print:shadow-none print:p-0">
+        
+        {/* Document Letterhead */}
+        <div className="flex items-center justify-between border-b-2 border-gray-900 pb-6">
+          <div className="flex items-center space-x-4">
+            <img 
+              src="https://2g2m.com.br/imagens/2g2m-logo.png" 
+              alt="Logo 2G2M" 
+              className="h-12 w-auto object-contain"
+            />
+            <div>
+              <h2 className="text-xl font-black text-gray-900 uppercase tracking-tight">
+                2G2M Gestão de Refeitórios
+              </h2>
+              <p className="text-xs text-gray-600 font-bold uppercase">
+                Documento de Cobrança e Reembolso de Descontos
+              </p>
+            </div>
+          </div>
+
+          <div className="text-right text-xs font-mono text-gray-600">
+            <div>Emissão: {new Date().toLocaleDateString('pt-BR')}</div>
+            <div>Ref: {dataInicio || 'Início'} até {dataFim || 'Atual'}</div>
+          </div>
+        </div>
+
+        {/* Explanation Banner */}
+        <div className="bg-red-50 border border-red-200 p-4 rounded-2xl text-xs text-red-900 font-medium">
+          <strong>Lógica de Reembolso do Contratante:</strong> Para cada modalidade de bolsa/desconto autorizada pela instituição, calcula-se a parcela percentual subsididada referente ao valor cheio do serviço (ex: 100% desc = 100% reembolso do valor base; 70% desc = 70% reembolso do valor base).
+        </div>
+
+        {/* Highlighted Big Total */}
+        <div className="bg-gray-900 text-white rounded-2xl p-6 flex items-center justify-between shadow-md">
+          <div className="flex items-center space-x-3">
+            <div className="p-3 bg-red-600 rounded-xl">
+              <Building className="w-8 h-8 text-white" />
+            </div>
+            <div>
+              <span className="text-xs font-bold text-gray-400 uppercase tracking-wider block">
+                Valor Total a Reembolsar do Contratante
+              </span>
+              <span className="text-xs text-red-400 font-semibold">
+                Soma acumulada de todos os subsídios no período
+              </span>
+            </div>
+          </div>
+
+          <div className="text-right">
+            <span className="text-3xl font-black text-emerald-400 block">
+              R$ {totalGeralSubsidio.toFixed(2).replace('.', ',')}
+            </span>
+            <span className="text-[11px] text-gray-400 font-medium">
+              Total de {totalGeralAtendimentos} refeições atendidas
+            </span>
+          </div>
+        </div>
+
+        {/* Breakdown Table by Plan */}
+        <div className="space-y-3">
+          <h4 className="text-sm font-black text-gray-900 uppercase tracking-wide">
+            Consolidado por Faixa de Desconto
+          </h4>
+
+          <div className="border border-gray-200 rounded-2xl overflow-hidden">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-gray-50 border-b border-gray-200 text-gray-700 font-extrabold uppercase">
+                <tr>
+                  <th className="px-4 py-3">Código do Plano</th>
+                  <th className="px-4 py-3">Percentual Desconto</th>
+                  <th className="px-4 py-3">Qtd. Refeições</th>
+                  <th className="px-4 py-3">Valor Base Total</th>
+                  <th className="px-4 py-3 text-right">Valor do Reembolso</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 font-medium text-gray-800">
+                {listaPlanosSubsidio.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-4 py-6 text-center text-gray-500">
+                      Nenhum registro de venda para calcular reembolso.
+                    </td>
+                  </tr>
+                ) : (
+                  listaPlanosSubsidio.map((item) => (
+                    <tr key={item.planoCodigo} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 font-bold text-gray-900">{item.planoCodigo}</td>
+                      <td className="px-4 py-3 font-extrabold text-red-600">{item.percentualDesconto}% desc</td>
+                      <td className="px-4 py-3 font-bold">{item.quantidade} acessos</td>
+                      <td className="px-4 py-3 font-mono">R$ {item.valorBaseTotal.toFixed(2).replace('.', ',')}</td>
+                      <td className="px-4 py-3 text-right font-black text-emerald-600 text-sm">
+                        R$ {item.valorSubsidioTotal.toFixed(2).replace('.', ',')}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Detailed Itemized Sales Table (Contains ID Venda and Matrícula Aluno) */}
+        <div className="space-y-3 pt-4 border-t border-gray-200">
+          <div className="flex items-center justify-between">
+            <h4 className="text-sm font-black text-gray-900 uppercase tracking-wide">
+              Relação Analítica de Atendimentos para Reembolso
+            </h4>
+            <span className="text-xs text-gray-500 font-medium">
+              {vendasFiltradas.length} lançamentos individuais
+            </span>
+          </div>
+
+          <div className="border border-gray-200 rounded-2xl overflow-x-auto">
+            <table className="w-full text-left text-xs whitespace-nowrap">
+              <thead className="bg-gray-800 text-white font-extrabold uppercase">
+                <tr>
+                  <th className="px-3 py-2.5">ID Venda</th>
+                  <th className="px-3 py-2.5">Matrícula</th>
+                  <th className="px-3 py-2.5">Aluno</th>
+                  <th className="px-3 py-2.5">Curso</th>
+                  <th className="px-3 py-2.5">Data / Hora</th>
+                  <th className="px-3 py-2.5">Serviço</th>
+                  <th className="px-3 py-2.5">Plano</th>
+                  <th className="px-3 py-2.5 text-right">Subsídio Reembolso</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 font-medium text-gray-800">
+                {vendasFiltradas.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="px-4 py-6 text-center text-gray-500">
+                      Nenhum atendimento individual registrado no período selecionado.
+                    </td>
+                  </tr>
+                ) : (
+                  vendasFiltradas.map((v) => (
+                    <tr key={v.id} className="hover:bg-gray-50">
+                      <td className="px-3 py-2 font-mono text-[10px] text-gray-500 font-bold">{v.id}</td>
+                      <td className="px-3 py-2 font-mono text-[11px] font-black text-gray-900">{v.alunoMatricula}</td>
+                      <td className="px-3 py-2 font-bold text-gray-900">{v.alunoNome}</td>
+                      <td className="px-3 py-2 text-gray-600">{v.alunoCurso}</td>
+                      <td className="px-3 py-2 text-gray-500 text-[11px]">
+                        {v.dataHora ? new Date(v.dataHora).toLocaleString('pt-BR') : '-'}
+                      </td>
+                      <td className="px-3 py-2 font-bold">{v.servicoNome}</td>
+                      <td className="px-3 py-2">
+                        <span className="inline-block bg-gray-100 px-2 py-0.5 rounded text-[10px] font-bold text-gray-700">
+                          {v.planoCodigo} ({v.percentualDesconto}%)
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-right font-black text-emerald-600 font-mono">
+                        R$ {(v.valorSubsidio || 0).toFixed(2).replace('.', ',')}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Signatures for Official Receipt */}
+        <div className="pt-12 grid grid-cols-2 gap-8 text-center text-xs text-gray-600 font-medium">
+          <div className="border-t border-gray-400 pt-2">
+            <div>_______________________________________</div>
+            <div className="font-bold text-gray-900 mt-1">2G2M Gestão de Refeitórios</div>
+            <div>Responsável Financeiro</div>
+          </div>
+
+          <div className="border-t border-gray-400 pt-2">
+            <div>_______________________________________</div>
+            <div className="font-bold text-gray-900 mt-1">Instituição de Ensino / Contratante</div>
+            <div>De acordo e Visto de Conformidade</div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  );
+};

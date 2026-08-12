@@ -1,0 +1,46 @@
+@import "tailwindcss";
+
+@layer utilities {
+  /* Hide scrollbar for Chrome, Safari and Opera */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  /* Hide scrollbar for IE, Edge and Firefox */
+  .no-scrollbar {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+  }
+}
+
+/* Thermal Paper Receipt 5cm x 6cm Print Rules */
+@media print {
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  body * {
+    visibility: hidden !important;
+  }
+
+  #receipt-print-area,
+  #receipt-print-area * {
+    visibility: visible !important;
+  }
+
+  #receipt-print-area {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 50mm !important;
+    max-width: 50mm !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  @page {
+    size: 58mm auto;
+    margin: 0mm;
+  }
+}
+

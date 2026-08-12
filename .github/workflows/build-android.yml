@@ -1,0 +1,66 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Instalar dependências do app (React/Vite)
+        run: npm install
+
+      - name: Build de produção do app (gera dist/)
+        run: npm run build
+
+      - name: Configurar Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Configurar Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Instalar Cordova CLI
+        run: npm install -g cordova
+
+      - name: Criar esqueleto do projeto Cordova
+        run: cordova create cordova-project br.com.x4studio.pdv2g2m "PDV 2G2M"
+
+      - name: Substituir www/ pelo build do React
+        run: |
+          rm -rf cordova-project/www
+          cp -r dist cordova-project/www
+
+      - name: Aplicar nosso config.xml customizado
+        run: cp packaging/config.xml cordova-project/config.xml
+
+      - name: Adicionar plataforma Android
+        working-directory: cordova-project
+        run: cordova platform add android
+
+      - name: Adicionar plugin de impressão (cordova-plugin-printer)
+        working-directory: cordova-project
+        run: cordova plugin add cordova-plugin-printer
+
+      - name: Compilar APK (debug)
+        working-directory: cordova-project
+        run: cordova build android
+
+      - name: Publicar APK como artefato do workflow
+        uses: actions/upload-artifact@v4
+        with:
+          name: pdv-2g2m-apk-debug
+          path: cordova-project/platforms/android/app/build/outputs/apk/debug/app-debug.apk

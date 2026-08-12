@@ -1,0 +1,6 @@
+{
+  "name": "Sistema PDV/Admin 2G2M",
+  "description": "Sistema de Ponto de Venda e Autoatendimento para refeitório escolar com gestão administrativa, relatórios e emissão de cupons.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
