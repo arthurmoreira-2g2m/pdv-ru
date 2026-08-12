@@ -29,6 +29,11 @@
          não está integrado — ver printerService.ts para detalhes. -->
     <plugin name="cordova-plugin-printer" spec="~0.8.0" />
 
+    <!-- Hook que corrige os imports do cordova-plugin-printer para AndroidX
+         (o pacote original ainda usa android.support.*, que não existe mais
+         em builds Cordova Android atuais). Ver hooks/fix-printer-androidx.js -->
+    <hook type="after_prepare" src="hooks/fix-printer-androidx.js" />
+
     <!--
         ATENÇÃO — ÍCONES:
         Substitua os arquivos abaixo por ícones reais do 2G2M (fundo vermelho,

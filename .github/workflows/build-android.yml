@@ -47,6 +47,9 @@ jobs:
       - name: Aplicar nosso config.xml customizado
         run: cp packaging/config.xml cordova-project/config.xml
 
+      - name: Copiar hooks de correção (AndroidX etc.)
+        run: cp -r hooks cordova-project/hooks
+
       - name: Adicionar plataforma Android
         working-directory: cordova-project
         run: cordova platform add android
