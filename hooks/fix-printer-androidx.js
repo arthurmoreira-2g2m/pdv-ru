@@ -67,16 +67,39 @@ module.exports = function (context) {
   files.forEach((f) => patchFile(path.join(dir, f)));
 
   // Também garante que a lib androidx.print (que traz PrintHelper) está disponível.
+  // IMPORTANTE: o build.gradle do Cordova tem MAIS DE UM bloco "dependencies {" —
+  // o primeiro é do "buildscript" (só aceita "classpath", não "implementation").
+  // Por isso ancoramos num trecho específico do bloco de dependências do APP
+  // (a linha "implementation fileTree(...)" que o template do Cordova sempre gera),
+  // e não no primeiro "dependencies {" que aparece no arquivo.
   const buildGradlePath = path.join(projectRoot, 'platforms', 'android', 'app', 'build.gradle');
   if (fs.existsSync(buildGradlePath)) {
     let gradle = fs.readFileSync(buildGradlePath, 'utf8');
+
     if (!gradle.includes('androidx.print:print')) {
-      gradle = gradle.replace(
-        /dependencies\s*{/,
-        "dependencies {\n    implementation 'androidx.print:print:1.0.0'"
-      );
-      fs.writeFileSync(buildGradlePath, gradle, 'utf8');
-      console.log('[fix-printer-androidx] Adicionada dependência androidx.print ao build.gradle');
+      const anchor = /implementation\s+fileTree\(dir:\s*['"]libs['"][^)]*\)/;
+
+      if (anchor.test(gradle)) {
+        gradle = gradle.replace(anchor, (match) => `${match}\n    implementation 'androidx.print:print:1.0.0'`);
+        fs.writeFileSync(buildGradlePath, gradle, 'utf8');
+        console.log('[fix-printer-androidx] Adicionada dependência androidx.print ao build.gradle (âncora fileTree)');
+      } else {
+        // Fallback: usa o ÚLTIMO "dependencies {" do arquivo (o do buildscript
+        // é sempre o primeiro a aparecer, então o último é o do app).
+        const matches = [...gradle.matchAll(/dependencies\s*\{/g)];
+        if (matches.length > 0) {
+          const last = matches[matches.length - 1];
+          const insertAt = last.index + last[0].length;
+          gradle =
+            gradle.slice(0, insertAt) +
+            "\n    implementation 'androidx.print:print:1.0.0'" +
+            gradle.slice(insertAt);
+          fs.writeFileSync(buildGradlePath, gradle, 'utf8');
+          console.log('[fix-printer-androidx] Adicionada dependência androidx.print ao build.gradle (fallback: último bloco dependencies)');
+        } else {
+          console.log('[fix-printer-androidx] AVISO: nenhum bloco dependencies encontrado — dependência androidx.print NÃO foi adicionada.');
+        }
+      }
     }
   }
 };
