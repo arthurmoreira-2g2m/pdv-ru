@@ -173,3 +173,92 @@ export async function enviarFechamentoEmail(
     };
   }
 }
+
+export interface RecuperacaoReport {
+  periodoRotulo: string;
+  totalAtendimentos: number;
+  totalSubsidio: number;
+  resumoPlanos: Array<{
+    planoCodigo: string;
+    percentualDesconto: number;
+    quantidade: number;
+    valorBaseTotal: number;
+    valorSubsidioTotal: number;
+  }>;
+  vendasDetalhadas: Venda[];
+}
+
+/**
+ * Sends discount recovery report email via EmailJS
+ */
+export async function enviarRecuperacaoEmail(
+  report: RecuperacaoReport,
+  config: ConfiguracoesSistema,
+  emailDestinoCustom?: string
+): Promise<SendEmailResult> {
+  const { emailjsServiceId, emailjsTemplateId, emailjsPublicKey, emailjsDestinatario } = config;
+  const targetEmail = emailDestinoCustom?.trim() || emailjsDestinatario || 'financeiro@2g2m.com.br';
+
+  const resumoPlanosText = report.resumoPlanos
+    .map(p => `- Plano ${p.planoCodigo} (${p.percentualDesconto}% desc): ${p.quantidade} acessos | Base: R$ ${p.valorBaseTotal.toFixed(2).replace('.', ',')} | Reembolso: R$ ${p.valorSubsidioTotal.toFixed(2).replace('.', ',')}`)
+    .join('\n');
+
+  const amostraVendasText = report.vendasDetalhadas
+    .slice(0, 20)
+    .map(v => `- [Mat: ${v.alunoMatricula}] ${v.alunoNome} (${v.servicoNome}): Reembolso R$ ${(v.valorSubsidio || 0).toFixed(2).replace('.', ',')}`)
+    .join('\n');
+
+  const totalVendasMais = report.vendasDetalhadas.length > 20 
+    ? `\n... e mais ${report.vendasDetalhadas.length - 20} atendimentos cadastrados no sistema.` 
+    : '';
+
+  const payloadParams = {
+    to_email: targetEmail,
+    tipo_fechamento: 'Solicitação de Recuperação de Descontos (Reembolso Contratante)',
+    periodo: report.periodoRotulo,
+    qtd_vendas: report.totalAtendimentos,
+    total_bruto: `R$ ${report.resumoPlanos.reduce((a, b) => a + b.valorBaseTotal, 0).toFixed(2).replace('.', ',')}`,
+    total_cobrado_alunos: 'R$ 0,00',
+    total_subsidio: `R$ ${report.totalSubsidio.toFixed(2).replace('.', ',')}`,
+    resumo_servicos: `CONSOLIDADO POR FAIXA DE DESCONTO:\n${resumoPlanosText}\n\nRELAÇÃO ANALÍTICA DE ATENDIMENTOS:\n${amostraVendasText}${totalVendasMais}`,
+    data_envio: new Date().toLocaleString('pt-BR'),
+  };
+
+  if (!emailjsServiceId || !emailjsTemplateId || !emailjsPublicKey) {
+    return {
+      sucesso: false,
+      mensagem: 'Erro: Configurações do EmailJS ausentes ou incompletas. Acesse o menu Configurações no Painel Admin e informe o Service ID, Template ID e Public Key.',
+    };
+  }
+
+  try {
+    const response = await emailjs.send(
+      emailjsServiceId,
+      emailjsTemplateId,
+      payloadParams,
+      emailjsPublicKey
+    );
+
+    if (response.status === 200) {
+      return {
+        sucesso: true,
+        mensagem: `E-mail de Recuperação de Descontos enviado com sucesso para ${targetEmail}!`,
+        detalhes: {
+          status: response.status,
+          destinatario: targetEmail,
+        },
+      };
+    } else {
+      return {
+        sucesso: false,
+        mensagem: `Erro ao enviar e-mail: Código de resposta ${response.status} - ${response.text}`,
+      };
+    }
+  } catch (error: any) {
+    console.error('EmailJS Error:', error);
+    return {
+      sucesso: false,
+      mensagem: `Falha no envio de e-mail via EmailJS: ${error?.text || error?.message || 'Erro de conexão ou credenciais.'}`,
+    };
+  }
+}

@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Venda } from '../../types';
-import { getAllVendas } from '../../db/indexedDB';
+import { getAllVendas, getConfiguracoes } from '../../db/indexedDB';
+import { enviarRecuperacaoEmail } from '../../services/emailService';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 import { 
   FileCheck, 
@@ -9,13 +12,20 @@ import {
   Calendar, 
   DollarSign, 
   FileSpreadsheet,
-  Building
+  Building,
+  FileText,
+  Mail,
+  Loader2,
+  CheckCircle,
+  AlertCircle
 } from 'lucide-react';
 
 export const TabRecuperacaoDescontos: React.FC = () => {
   const [vendas, setVendas] = useState<Venda[]>([]);
   const [dataInicio, setDataInicio] = useState<string>('');
   const [dataFim, setDataFim] = useState<string>('');
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [emailStatus, setEmailStatus] = useState<{ msg: string; isError: boolean } | null>(null);
 
   useEffect(() => {
     loadVendas();
@@ -85,9 +95,178 @@ export const TabRecuperacaoDescontos: React.FC = () => {
     window.print();
   };
 
+  // Generate Client-Side PDF Report (jsPDF)
+  const handleGerarPdf = () => {
+    const periodoRotulo = dataInicio || dataFim 
+      ? `De ${dataInicio || 'Início'} até ${dataFim || 'Atual'}`
+      : 'Período Completo Acumulado';
+
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4',
+    });
+
+    // Header Title
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(15);
+    doc.setTextColor(185, 28, 28);
+    doc.text('2G2M GESTÃO DE REFEITÓRIOS', 14, 16);
+
+    doc.setFontSize(11);
+    doc.setTextColor(31, 41, 55);
+    doc.text('Solicitação de Recuperação de Descontos e Reembolso', 14, 22);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(107, 114, 128);
+    doc.text(`Período de Referência: ${periodoRotulo}`, 14, 27);
+    doc.text(`Emissão: ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}`, 14, 31);
+
+    doc.setLineWidth(0.5);
+    doc.setDrawColor(229, 231, 235);
+    doc.line(14, 34, 196, 34);
+
+    // Total Highlight Box
+    doc.setFillColor(243, 244, 246);
+    doc.rect(14, 37, 182, 18, 'F');
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9.5);
+    doc.setTextColor(17, 24, 39);
+    doc.text('VALOR TOTAL A REEMBOLSAR DO CONTRATANTE:', 18, 44);
+
+    doc.setFontSize(13);
+    doc.setTextColor(16, 185, 129);
+    doc.text(`R$ ${totalGeralSubsidio.toFixed(2).replace('.', ',')}`, 18, 51);
+
+    doc.setFontSize(8.5);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(107, 114, 128);
+    doc.text(`(${totalGeralAtendimentos} refeições/acessos atendidos no período)`, 120, 51);
+
+    // Table 1: Plan Summary
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.setTextColor(31, 41, 55);
+    doc.text('1. Consolidado por Faixa de Desconto / Plano', 14, 62);
+
+    const table1Data = listaPlanosSubsidio.map((p) => [
+      p.planoCodigo,
+      `${p.percentualDesconto}%`,
+      `${p.quantidade} acessos`,
+      `R$ ${p.valorBaseTotal.toFixed(2).replace('.', ',')}`,
+      `R$ ${p.valorSubsidioTotal.toFixed(2).replace('.', ',')}`,
+    ]);
+
+    autoTable(doc, {
+      startY: 65,
+      head: [['Código do Plano', 'Desconto (%)', 'Qtd. Refeições', 'Valor Base Total', 'Valor Reembolso']],
+      body: table1Data,
+      theme: 'grid',
+      headStyles: { fillColor: [220, 38, 38], textColor: 255, fontStyle: 'bold', fontSize: 8.5 },
+      bodyStyles: { fontSize: 8 },
+      columnStyles: {
+        0: { fontStyle: 'bold' },
+        4: { fontStyle: 'bold', textColor: [16, 185, 129], halign: 'right' },
+      },
+    });
+
+    // Table 2: Itemized Sales
+    const finalY1 = (doc as any).lastAutoTable?.finalY || 100;
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.setTextColor(31, 41, 55);
+    doc.text('2. Relação Analítica de Atendimentos', 14, finalY1 + 10);
+
+    const table2Data = vendasFiltradas.map((v) => [
+      v.id || '-',
+      v.alunoMatricula || '-',
+      v.alunoNome || '-',
+      v.alunoCurso || '-',
+      v.dataHora ? new Date(v.dataHora).toLocaleString('pt-BR') : '-',
+      v.servicoNome || '-',
+      `${v.planoCodigo} (${v.percentualDesconto}%)`,
+      `R$ ${(v.valorSubsidio || 0).toFixed(2).replace('.', ',')}`,
+    ]);
+
+    autoTable(doc, {
+      startY: finalY1 + 13,
+      head: [['ID Venda', 'Matrícula', 'Aluno', 'Curso', 'Data/Hora', 'Serviço', 'Plano', 'Reembolso']],
+      body: table2Data,
+      theme: 'striped',
+      headStyles: { fillColor: [31, 41, 55], textColor: 255, fontStyle: 'bold', fontSize: 7.5 },
+      bodyStyles: { fontSize: 7 },
+      columnStyles: {
+        0: { fontSize: 6 },
+        1: { fontStyle: 'bold' },
+        7: { fontStyle: 'bold', textColor: [16, 185, 129], halign: 'right' },
+      },
+    });
+
+    // Signatures Block
+    const finalY2 = (doc as any).lastAutoTable?.finalY || 200;
+    const signatureY = Math.min(finalY2 + 22, 270);
+
+    doc.setLineWidth(0.3);
+    doc.setDrawColor(156, 163, 175);
+    doc.line(20, signatureY, 90, signatureY);
+    doc.line(110, signatureY, 180, signatureY);
+
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(31, 41, 55);
+    doc.text('2G2M Gestão de Refeitórios', 55, signatureY + 4, { align: 'center' });
+    doc.text('Instituição de Ensino / Contratante', 145, signatureY + 4, { align: 'center' });
+
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(107, 114, 128);
+    doc.text('Responsável Financeiro', 55, signatureY + 8, { align: 'center' });
+    doc.text('De acordo e Visto de Conformidade', 145, signatureY + 8, { align: 'center' });
+
+    doc.save(`Solicitacao_Recuperacao_Descontos_2G2M_${new Date().toISOString().split('T')[0]}.pdf`);
+  };
+
+  // Send Email via EmailJS
+  const handleSendEmail = async () => {
+    setEmailStatus(null);
+    setIsSendingEmail(true);
+
+    try {
+      const config = await getConfiguracoes();
+      const periodoRotulo = dataInicio || dataFim 
+        ? `De ${dataInicio || 'Início'} até ${dataFim || 'Atual'}`
+        : 'Período Completo Acumulado';
+
+      const result = await enviarRecuperacaoEmail(
+        {
+          periodoRotulo,
+          totalAtendimentos: totalGeralAtendimentos,
+          totalSubsidio: totalGeralSubsidio,
+          resumoPlanos: listaPlanosSubsidio,
+          vendasDetalhadas: vendasFiltradas,
+        },
+        config
+      );
+
+      setEmailStatus({
+        msg: result.mensagem,
+        isError: !result.sucesso,
+      });
+    } catch (err: any) {
+      console.error(err);
+      setEmailStatus({
+        msg: `Falha ao processar envio de e-mail: ${err?.message || 'Erro desconhecido'}`,
+        isError: true,
+      });
+    } finally {
+      setIsSendingEmail(false);
+    }
+  };
+
   // Export XLSX Document
   const handleExportXlsx = () => {
-    // 1. Detailed Sales Sheet (Contains ID Venda and Matrícula Aluno)
     const detalhamentoData = vendasFiltradas.map((v) => ({
       'ID Venda': v.id || '',
       'Matrícula Aluno': v.alunoMatricula || '',
@@ -102,7 +281,6 @@ export const TabRecuperacaoDescontos: React.FC = () => {
       'Valor Reembolso Subsídio (R$)': v.valorSubsidio || 0,
     }));
 
-    // 2. Summary by Plan Sheet
     const resumoData = listaPlanosSubsidio.map((p) => ({
       'Código do Plano': p.planoCodigo,
       'Percentual Desconto (%)': `${p.percentualDesconto}%`,
@@ -128,8 +306,8 @@ export const TabRecuperacaoDescontos: React.FC = () => {
   return (
     <div className="space-y-6">
       
-      {/* Top Banner */}
-      <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      {/* Top Banner with Action Buttons */}
+      <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
         <div>
           <h3 className="text-xl font-black text-gray-900 flex items-center gap-2">
             <FileCheck className="w-6 h-6 text-red-600" />
@@ -140,24 +318,69 @@ export const TabRecuperacaoDescontos: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-2 w-full md:w-auto">
+        <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
+          <button
+            onClick={handleGerarPdf}
+            className="flex items-center gap-1.5 bg-red-600 hover:bg-red-700 text-white font-extrabold px-3.5 py-2.5 rounded-xl text-xs transition-all shadow-md active:scale-95"
+          >
+            <FileText className="w-4 h-4 text-white" />
+            <span>Gerar PDF</span>
+          </button>
+
+          <button
+            onClick={handleSendEmail}
+            disabled={isSendingEmail}
+            className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold px-3.5 py-2.5 rounded-xl text-xs transition-all shadow-md active:scale-95 disabled:opacity-50"
+          >
+            {isSendingEmail ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Mail className="w-4 h-4" />
+            )}
+            <span>Enviar por E-mail</span>
+          </button>
+
           <button
             onClick={handlePrintReport}
-            className="flex items-center gap-1.5 bg-gray-900 hover:bg-black text-white font-extrabold px-4 py-2.5 rounded-xl text-xs transition-all shadow"
+            className="flex items-center gap-1.5 bg-gray-900 hover:bg-black text-white font-extrabold px-3.5 py-2.5 rounded-xl text-xs transition-all shadow active:scale-95"
           >
             <Printer className="w-4 h-4 text-red-500" />
-            <span>Imprimir Relatório</span>
+            <span>Imprimir</span>
           </button>
 
           <button
             onClick={handleExportXlsx}
-            className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-4 py-2.5 rounded-xl text-xs transition-all shadow"
+            className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-3.5 py-2.5 rounded-xl text-xs transition-all shadow active:scale-95"
           >
             <Download className="w-4 h-4" />
-            <span>Exportar Excel</span>
+            <span>Excel</span>
           </button>
         </div>
       </div>
+
+      {/* Email Status Notification Banner */}
+      {emailStatus && (
+        <div className={`p-4 rounded-2xl border text-xs font-bold flex items-center justify-between gap-3 ${
+          emailStatus.isError 
+            ? 'bg-red-50 text-red-900 border-red-200' 
+            : 'bg-emerald-50 text-emerald-900 border-emerald-200'
+        }`}>
+          <div className="flex items-center gap-2">
+            {emailStatus.isError ? (
+              <AlertCircle className="w-5 h-5 text-red-600 shrink-0" />
+            ) : (
+              <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0" />
+            )}
+            <span>{emailStatus.msg}</span>
+          </div>
+          <button
+            onClick={() => setEmailStatus(null)}
+            className="text-xs underline font-black hover:opacity-80 shrink-0"
+          >
+            Fechar
+          </button>
+        </div>
+      )}
 
       {/* Date Filter Bar */}
       <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-sm flex flex-wrap items-center gap-4 text-xs font-semibold text-gray-700">

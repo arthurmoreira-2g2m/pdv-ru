@@ -12,16 +12,40 @@ export default function App() {
   const [dbReady, setDbReady] = useState(false);
 
   useEffect(() => {
-    async function init() {
-      try {
-        await initializeDatabaseSeed();
-        setDbReady(true);
-      } catch (err) {
-        console.error('Erro ao inicializar banco de dados:', err);
+    let active = true;
+
+    // Safety fallback: Never keep the app frozen on loading screen for more than 1.5 seconds
+    const safetyTimer = setTimeout(() => {
+      if (active) {
+        console.warn('[2G2M] Initializing DB took >1.5s, forcing UI render.');
         setDbReady(true);
       }
+    }, 1500);
+
+    const startApp = async () => {
+      try {
+        await initializeDatabaseSeed();
+      } catch (err) {
+        console.error('[2G2M] Erro ao inicializar banco de dados:', err);
+      } finally {
+        if (active) {
+          clearTimeout(safetyTimer);
+          setDbReady(true);
+        }
+      }
+    };
+
+    // If running in Cordova/VoltBuilder, wait for deviceready or run immediately
+    if ((window as any).cordova || (window as any).Cordova) {
+      document.addEventListener('deviceready', startApp, false);
+    } else {
+      startApp();
     }
-    init();
+
+    return () => {
+      active = false;
+      clearTimeout(safetyTimer);
+    };
   }, []);
 
   if (!dbReady) {

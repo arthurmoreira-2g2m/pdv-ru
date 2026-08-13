@@ -7,7 +7,7 @@ import {
   getPlanoByCodigo, 
   registrarVenda 
 } from '../../db/indexedDB';
-import { imprimirCupom, formatarDadosCupom, CouponData } from '../../services/printerService';
+import { imprimirCupom, imprimirCupomViaIframe, formatarDadosCupom, CouponData } from '../../services/printerService';
 import { ThermalReceipt } from '../ThermalReceipt';
 import { 
   User, 
@@ -329,8 +329,11 @@ export const PdvFlow: React.FC<PdvFlowProps> = ({ onReturnHome }) => {
                     <User className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
                     <input
                       type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      maxLength={20}
                       value={matriculaInput}
-                      onChange={(e) => setMatriculaInput(e.target.value)}
+                      onChange={(e) => setMatriculaInput(e.target.value.replace(/\D/g, ''))}
                       placeholder="Ex: 2026001"
                       className="w-full pl-12 pr-4 py-3.5 bg-gray-50 border-2 border-gray-200 rounded-2xl font-bold text-lg text-gray-900 focus:outline-none focus:border-red-600 focus:bg-white transition-all"
                       autoFocus
@@ -346,8 +349,11 @@ export const PdvFlow: React.FC<PdvFlowProps> = ({ onReturnHome }) => {
                     <Lock className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
                     <input
                       type="password"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      maxLength={6}
                       value={senhaInput}
-                      onChange={(e) => setSenhaInput(e.target.value)}
+                      onChange={(e) => setSenhaInput(e.target.value.replace(/\D/g, ''))}
                       placeholder="••••••"
                       className="w-full pl-12 pr-4 py-3.5 bg-gray-50 border-2 border-gray-200 rounded-2xl font-bold text-lg text-gray-900 focus:outline-none focus:border-red-600 focus:bg-white transition-all"
                     />
@@ -425,9 +431,12 @@ export const PdvFlow: React.FC<PdvFlowProps> = ({ onReturnHome }) => {
                   </label>
                   <input
                     type="password"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={6}
                     value={novaSenhaInput}
-                    onChange={(e) => setNovaSenhaInput(e.target.value)}
-                    placeholder="Digite a nova senha"
+                    onChange={(e) => setNovaSenhaInput(e.target.value.replace(/\D/g, ''))}
+                    placeholder="Digite a nova senha (6 dígitos)"
                     className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-2xl font-bold text-lg text-gray-900 focus:outline-none focus:border-red-600"
                     autoFocus
                   />
@@ -439,9 +448,12 @@ export const PdvFlow: React.FC<PdvFlowProps> = ({ onReturnHome }) => {
                   </label>
                   <input
                     type="password"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={6}
                     value={confirmarSenhaInput}
-                    onChange={(e) => setConfirmarSenhaInput(e.target.value)}
-                    placeholder="Repita a nova senha"
+                    onChange={(e) => setConfirmarSenhaInput(e.target.value.replace(/\D/g, ''))}
+                    placeholder="Repita a nova senha (6 dígitos)"
                     className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-2xl font-bold text-lg text-gray-900 focus:outline-none focus:border-red-600"
                   />
                 </div>
@@ -665,14 +677,22 @@ export const PdvFlow: React.FC<PdvFlowProps> = ({ onReturnHome }) => {
                 </div>
               </div>
 
-              <div className="flex items-center justify-between pt-4 border-t border-gray-100">
-                <span className="text-xs text-gray-500 font-semibold flex items-center gap-1">
-                  <Printer className="w-4 h-4 text-emerald-600" />
-                  Imprimindo em bobina 5cm x 6cm
-                </span>
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-gray-100">
+                <button
+                  onClick={() => {
+                    if (couponData) {
+                      imprimirCupomViaIframe(couponData);
+                    }
+                  }}
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-800 font-extrabold px-4 py-3 rounded-xl text-xs transition-all border border-gray-300"
+                >
+                  <Printer className="w-4 h-4 text-gray-700" />
+                  <span>Reimprimir Cupom</span>
+                </button>
+
                 <button
                   onClick={resetPdv}
-                  className="bg-red-600 hover:bg-red-700 text-white font-extrabold px-6 py-3 rounded-xl text-sm transition-all shadow"
+                  className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white font-extrabold px-6 py-3 rounded-xl text-sm transition-all shadow-md active:scale-95"
                 >
                   Novo Acesso ({countdown}s)
                 </button>

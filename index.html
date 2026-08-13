@@ -1,11 +1,22 @@
 <!doctype html>
-<html lang="en">
+<html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>My Google AI Studio App</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="format-detection" content="telephone=no" />
+    <meta name="msapplication-tap-highlight" content="no" />
+    <title>2G2M Refeitório - Totem PDV</title>
+    <!-- Cordova Script Loader (Optional for VoltBuilder/Hybrid Apps) -->
+    <script>
+      if (window.location.protocol === 'file:' || window.cordova || navigator.userAgent.includes('Cordova')) {
+        var script = document.createElement('script');
+        script.src = 'cordova.js';
+        script.onerror = function() { console.log('cordova.js not loaded (web environment)'); };
+        document.head.appendChild(script);
+      }
+    </script>
   </head>
-  <body>
+  <body class="bg-gray-100 antialiased select-none overflow-x-hidden">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

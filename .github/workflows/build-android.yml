@@ -37,15 +37,15 @@ jobs:
         run: npm install -g cordova
 
       - name: Criar esqueleto do projeto Cordova
-        run: cordova create cordova-project br.com.x4studio.pdv2g2m "PDV 2G2M"
+        run: cordova create cordova-project com.twogtwom.refeitorio.app "2G2M Refeitório"
 
       - name: Substituir www/ pelo build do React
         run: |
           rm -rf cordova-project/www
           cp -r dist cordova-project/www
 
-      - name: Aplicar nosso config.xml customizado
-        run: cp packaging/config.xml cordova-project/config.xml
+      - name: Aplicar nosso config.xml (raiz do repositório)
+        run: cp config.xml cordova-project/config.xml
 
       - name: Copiar hooks de correção (AndroidX etc.)
         run: cp -r hooks cordova-project/hooks
