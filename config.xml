@@ -25,11 +25,9 @@
     <!-- Android Specific Permissions for Printing & Storage -->
     <plugin name="cordova-plugin-whitelist" spec="^1.3.5" />
 
-    <!-- Plugin nativo para abrir o diálogo de impressão do Android (Print Framework).
-         TESTE: usado para verificar se a impressora do SK210 está exposta como
-         Print Service padrão do Android, enquanto o SDK oficial da Gertec não
-         está integrado — ver printerService.ts para detalhes. -->
-    <plugin name="cordova-plugin-printer" spec="~0.8.0" />
+    <!-- Plugin nativo Gertec/Topwise: fala diretamente com o SDK real da
+         impressora térmica embutida do SK210 via AIDL. Ver plugins/cordova-plugin-gertec-printer. -->
+    <plugin name="cordova-plugin-gertec-printer" spec="../plugins/cordova-plugin-gertec-printer" />
 
     <!-- Hook que corrige os imports do cordova-plugin-printer para AndroidX
          (o pacote original ainda usa android.support.*, incompatível com

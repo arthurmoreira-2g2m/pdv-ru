@@ -54,9 +54,9 @@ jobs:
         working-directory: cordova-project
         run: cordova platform add android
 
-      - name: Adicionar plugin de impressão (cordova-plugin-printer)
+      - name: Adicionar plugin nativo da impressora Gertec/Topwise
         working-directory: cordova-project
-        run: cordova plugin add cordova-plugin-printer
+        run: cordova plugin add ../plugins/cordova-plugin-gertec-printer
 
       - name: Compilar APK (debug)
         working-directory: cordova-project

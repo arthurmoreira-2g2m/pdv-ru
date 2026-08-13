@@ -60,11 +60,33 @@ module.exports = function (context) {
 
   if (!fs.existsSync(dir)) {
     console.log('[fix-printer-androidx] Pasta do plugin ainda não existe, nada a corrigir agora.');
-    return;
+  } else {
+    const files = fs.readdirSync(dir).filter((f) => f.endsWith('.java'));
+    files.forEach((f) => patchFile(path.join(dir, f)));
   }
 
-  const files = fs.readdirSync(dir).filter((f) => f.endsWith('.java'));
-  files.forEach((f) => patchFile(path.join(dir, f)));
+  // ---------------------------------------------------------------
+  // Garante que o TOPSDK.jar (SDK real Gertec/Topwise) está copiado para
+  // platforms/android/app/libs — mesmo se o mecanismo <lib-file> do
+  // plugin.xml não copiar corretamente nesta versão do Cordova.
+  // ---------------------------------------------------------------
+  const gertecPluginLibsDir = path.join(projectRoot, 'plugins', 'cordova-plugin-gertec-printer', 'libs');
+  const appLibsDir = path.join(projectRoot, 'platforms', 'android', 'app', 'libs');
+
+  if (fs.existsSync(gertecPluginLibsDir)) {
+    if (!fs.existsSync(appLibsDir)) {
+      fs.mkdirSync(appLibsDir, { recursive: true });
+    }
+    const jarFiles = fs.readdirSync(gertecPluginLibsDir).filter((f) => f.endsWith('.jar'));
+    jarFiles.forEach((jar) => {
+      const src = path.join(gertecPluginLibsDir, jar);
+      const dest = path.join(appLibsDir, jar);
+      if (!fs.existsSync(dest)) {
+        fs.copyFileSync(src, dest);
+        console.log(`[fix-printer-androidx] Copiado ${jar} para app/libs`);
+      }
+    });
+  }
 
   // Também garante que a lib androidx.print (que traz PrintHelper) está disponível.
   // IMPORTANTE: o build.gradle do Cordova tem MAIS DE UM bloco "dependencies {" —

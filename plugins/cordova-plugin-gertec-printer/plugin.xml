@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<plugin xmlns="http://apache.org/cordova/ns/plugins/1.0"
+        id="cordova-plugin-gertec-printer"
+        version="1.0.0">
+
+    <name>GertecPrinterPlugin</name>
+    <description>
+        Ponte nativa para a impressora térmica embutida em totens Gertec
+        (SK210 e compatíveis), via SDK Topwise CloudPOS (AIDL). Baseado na
+        implementação comprovada do plugin open-source "gertec"
+        (github.com/brasizza/gertec), testado no mesmo modelo SK-210.
+    </description>
+    <license>Apache 2.0</license>
+
+    <js-module src="www/gertecPrinter.js" name="GertecPrinter">
+        <clobbers target="GertecPrinter" />
+    </js-module>
+
+    <platform name="android">
+        <config-file target="res/xml/config.xml" parent="/*">
+            <feature name="GertecPrinterPlugin">
+                <param name="android-package" value="br.com.x4studio.gertecprinter.GertecPrinterPlugin" />
+            </feature>
+        </config-file>
+
+        <source-file src="src/android/GertecPrinterPlugin.java"
+                     target-dir="src/br/com/x4studio/gertecprinter" />
+
+        <!-- SDK real da Topwise/Gertec (extraído do plugin open-source
+             brasizza/gertec, testado em Gertec SK-210). O hook abaixo
+             copia este .jar para dentro de platforms/android/app/libs,
+             pasta que o build.gradle padrão do Cordova já inclui via
+             "implementation fileTree(dir: 'libs', include: ['*.jar'])". -->
+        <lib-file src="libs/TOPSDK_V1.7.5_20231108.jar" />
+    </platform>
+</plugin>

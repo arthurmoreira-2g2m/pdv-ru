@@ -54,87 +54,47 @@ export function formatarDadosCupom(venda: Venda): CouponData {
 
 /**
  * ARQUITETURA DE IMPRESSÃO TÉRMICA REAL (GERTEC SK210 TOTEM):
- * 
- * A impressora térmica embutida no Totem Gertec SK210 é acessada exclusivamente via SDK Oficial da Gertec.
- * O SDK oficial deve ser obtido no Portal do Desenvolvedor Gertec (https://developer.gertec.com.br).
- * 
- * Ao empacotar o app Android no VoltBuilder / Cordova com o plugin nativo Gertec instalado,
- * o plugin expõe a interface global em 'window.GertecPrinter' (ou 'window.gertecPrinter').
- * 
- * Prioridade de Execução:
- * 1. Se 'window.GertecPrinter' existir (no Totem físico), executa a impressão direta, nativa e silenciosa (Kiosk Mode).
- * 2. Se não existir (ambiente Web / Desenvolvimento / Teste em browser), executa o fallback via window.print() / iframe térmico (50mm/58mm).
- * 
- * Nota de Implementação do Plugin Nativo:
- * As chamadas abaixo utilizam uma estrutura de cupom de 58mm. Os nomes de métodos nativos exatos
- * (ex: printText, printHeader, cutPaper) deverão ser ajustados conforme a documentação do SDK oficial assim que baixado.
+ *
+ * A impressora térmica embutida no Totem Gertec SK210 é controlada pelo
+ * SDK Topwise CloudPOS (a Gertec licencia esse SDK internamente — é o
+ * mesmo usado por outros fabricantes de totem/POS que compram hardware
+ * da Topwise). Os nomes de pacote, classes e métodos abaixo foram
+ * confirmados a partir do código-fonte real (aberto) do plugin Flutter
+ * "gertec" (github.com/brasizza/gertec), cujo README declara
+ * explicitamente ter sido testado num Gertec SK-210 — o mesmo modelo
+ * usado neste projeto.
+ *
+ * O plugin nativo Cordova que implementa essa ponte está em
+ * /plugins/cordova-plugin-gertec-printer e expõe `window.GertecPrinter`
+ * com os métodos: printText, printQRCode, printBarCode, wrapLine,
+ * cutPaper, getPrinterState, startTransaction, finishTransaction.
+ *
+ * Prioridade de execução:
+ * 1. Se `window.GertecPrinter` existir (dentro do APK, no totem físico) →
+ *    imprime de forma nativa e silenciosa (kiosk mode).
+ * 2. Caso contrário (navegador comum / ambiente de desenvolvimento) →
+ *    fallback via `window.print()` / iframe (só serve para visualizar o
+ *    layout do cupom, não imprime de fato em nenhum totem).
+ *
+ * IMPORTANTE: esta integração foi construída a partir de um SDK real e
+ * comprovado no mesmo hardware, mas ainda não confirmado com a
+ * documentação oficial da Gertec (pendente de cadastro em
+ * developer.gertec.com.br). Testar fisicamente no SK210 antes de ir
+ * para produção.
  */
 export function imprimirCupom(venda: Venda): void {
   const couponData = formatarDadosCupom(venda);
-
-  // 1. Tenta impressão nativa no Totem Gertec SK210
   const win = typeof window !== 'undefined' ? (window as any) : {};
-  const gertecPlugin = win.GertecPrinter || win.gertecPrinter || win.cordova?.plugins?.gertecPrinter;
+  const gertec = win.GertecPrinter;
 
-  if (gertecPlugin) {
-    try {
-      console.log('[2G2M Gertec SK210] Enviando cupom para impressora térmica nativa Gertec...', couponData);
-      
-      // Exemplo de sequência de comandos do SDK Gertec (ajustar conforme documentação do SDK)
-      if (typeof gertecPlugin.imprimirCupom === 'function') {
-        gertecPlugin.imprimirCupom(couponData);
-        return;
-      } else if (typeof gertecPlugin.printFormattedText === 'function') {
-        const text = `
-*** 2G2M REFEITÓRIO ***
-Data: ${couponData.dataHoraFormatada}
---------------------------------
-SERVIÇO: ${couponData.servicoNome.toUpperCase()}
-ALUNO: ${couponData.alunoNome.toUpperCase()}
-CURSO: ${couponData.alunoCurso.toUpperCase()}
-MATRÍCULA: ${couponData.alunoMatricula}
---------------------------------
-[ALIGN CENTER][FONT BIG]${couponData.statusLinha}
---------------------------------
-Obrigado! Bom apetite. 🍽️
-\n\n\n`;
-        gertecPlugin.printFormattedText(text);
-        if (typeof gertecPlugin.cutPaper === 'function') {
-          gertecPlugin.cutPaper();
-        }
-        return;
-      }
-    } catch (err) {
-      console.warn('[2G2M Gertec SK210] Falha ao acionar impressora nativa Gertec, acionando fallback web:', err);
-    }
+  if (gertec && typeof gertec.startTransaction === 'function') {
+    imprimirViaGertecReal(gertec, couponData);
+    return;
   }
 
-  // 2. Camada intermediária de teste: cordova-plugin-printer (diálogo nativo
-  //    do Android). Isso serve para verificar se a impressora do SK210 está
-  //    exposta como um Print Service padrão do Android. Se não estiver, essa
-  //    camada só vai mostrar opções genéricas como "Salvar como PDF" — o que
-  //    já responde a pergunta sem precisar de mais nada.
-  const cordovaPrinter = win.cordova?.plugins?.printer;
-  if (cordovaPrinter) {
-    try {
-      console.log('[2G2M] Gertec SDK indisponível — testando via diálogo nativo do Android (cordova-plugin-printer)...');
-      const htmlCupom = buildReceiptHtml(couponData);
-      cordovaPrinter.print(
-        htmlCupom,
-        { name: 'Cupom-2G2M', duplex: 'none', landscape: false, graystyle: false },
-        (printed: boolean) => {
-          console.log('[2G2M] Diálogo de impressão nativo finalizado. Impresso?', printed);
-        }
-      );
-      return;
-    } catch (err) {
-      console.warn('[2G2M] Falha ao acionar cordova-plugin-printer, caindo para fallback window.print:', err);
-    }
-  }
-
-  // 3. Fallback via navegador / WebView puro (Chrome --kiosk-printing ou iframe)
-  //    ATENÇÃO: window.print() não funciona dentro do WebView padrão do
-  //    Cordova/Android — só serve para teste em navegador de desenvolvimento.
+  // Fallback via navegador / WebView puro — apenas para visualizar o
+  // layout em ambiente de desenvolvimento. NÃO funciona dentro do APK
+  // (window.print() é um no-op no WebView padrão do Cordova/Android).
   setTimeout(() => {
     try {
       if (typeof window !== 'undefined' && window.print) {
@@ -150,54 +110,40 @@ Obrigado! Bom apetite. 🍽️
 }
 
 /**
- * Standalone HTML string (inline styles) for the 58mm thermal coupon —
- * used specifically by cordova-plugin-printer, which prints arbitrary HTML
- * handed to it directly rather than the app's live DOM/stylesheet.
+ * Sequência real de comandos enviados ao plugin nativo Gertec/Topwise,
+ * seguindo o padrão de "transação em buffer" (várias chamadas de
+ * printText acumuladas, disparadas juntas em finishTransaction, que já
+ * cuida do avanço de papel + corte da guilhotina no final).
  */
-function buildReceiptHtml(c: CouponData): string {
-  const statusBg = c.isTotalGratis ? '#000' : '#fff';
-  const statusColor = c.isTotalGratis ? '#fff' : '#000';
-  const statusFontSize = c.isTotalGratis ? '16px' : '13px';
-  const statusPadding = c.isTotalGratis ? '10px 0' : '6px 0';
+function imprimirViaGertecReal(gertec: any, c: CouponData): void {
+  const onErr = (err: any) => console.error('[GertecPrinter] Erro na impressão:', err);
 
-  return `
-  <html>
-    <head>
-      <meta charset="utf-8" />
-      <style>
-        @page { size: 58mm auto; margin: 0mm; }
-        body { margin: 0; padding: 0; font-family: 'Courier New', monospace; color: #000; background: #fff; }
-        .receipt { width: 50mm; max-width: 50mm; margin: 0 auto; padding: 2mm; text-align: center; }
-        .header { font-weight: 900; font-size: 12px; text-transform: uppercase; border-bottom: 1px dashed #000; padding-bottom: 4px; margin-bottom: 4px; }
-        .data { font-size: 9px; font-weight: 600; margin-bottom: 4px; }
-        .divider { border-bottom: 1px dashed #000; margin: 4px 0; }
-        .fields { text-align: left; font-size: 8.5px; line-height: 1.3; }
-        .fields div { margin-bottom: 2px; }
-        .label { font-weight: 700; }
-        .status { margin: 6px 0; font-weight: 900; text-transform: uppercase; text-align: center;
-                   border: 2px solid #000; letter-spacing: 1px;
-                   font-size: ${statusFontSize}; padding: ${statusPadding};
-                   background: ${statusBg}; color: ${statusColor}; }
-        .footer { font-size: 8px; font-style: italic; margin-top: 4px; padding-top: 4px; border-top: 1px dashed #000; }
-      </style>
-    </head>
-    <body>
-      <div class="receipt">
-        <div class="header">*** 2G2M REFEITÓRIO ***</div>
-        <div class="data">Data: ${c.dataHoraFormatada}</div>
-        <div class="divider"></div>
-        <div class="fields">
-          <div><span class="label">SERVIÇO:</span> ${c.servicoNome.toUpperCase()}</div>
-          <div><span class="label">ALUNO:</span> ${c.alunoNome.toUpperCase()}</div>
-          <div><span class="label">CURSO:</span> ${c.alunoCurso.toUpperCase()}</div>
-          <div><span class="label">MATRÍCULA:</span> ${c.alunoMatricula}</div>
-        </div>
-        <div class="divider"></div>
-        <div class="status">${c.statusLinha}</div>
-        <div class="footer">Obrigado! Bom apetite.</div>
-      </div>
-    </body>
-  </html>`;
+  gertec.startTransaction(
+    () => {
+      gertec.printText({ text: '2G2M REFEITORIO', align: 1, bold: true, fontSize: 16 }, () => {}, onErr);
+      gertec.printText({ text: `Data: ${c.dataHoraFormatada}`, align: 1, fontSize: 8 }, () => {}, onErr);
+      gertec.printText({ text: '--------------------------------', align: 1, fontSize: 8 }, () => {}, onErr);
+      gertec.printText({ text: `SERVICO: ${c.servicoNome.toUpperCase()}`, align: 0, fontSize: 8 }, () => {}, onErr);
+      gertec.printText({ text: `ALUNO: ${c.alunoNome.toUpperCase()}`, align: 0, fontSize: 8 }, () => {}, onErr);
+      gertec.printText({ text: `CURSO: ${c.alunoCurso.toUpperCase()}`, align: 0, fontSize: 8 }, () => {}, onErr);
+      gertec.printText({ text: `MATRICULA: ${c.alunoMatricula}`, align: 0, fontSize: 8 }, () => {}, onErr);
+      gertec.printText({ text: '--------------------------------', align: 1, fontSize: 8 }, () => {}, onErr);
+      gertec.printText(
+        { text: c.statusLinha, align: 1, bold: true, fontSize: c.isTotalGratis ? 24 : 16 },
+        () => {},
+        onErr
+      );
+      gertec.printText({ text: '--------------------------------', align: 1, fontSize: 8 }, () => {}, onErr);
+      gertec.printText({ text: 'Obrigado! Bom apetite.', align: 1, fontSize: 8 }, () => {}, onErr);
+
+      gertec.finishTransaction(
+        true, // corta o papel ao final
+        () => console.log('[GertecPrinter] Cupom impresso com sucesso.'),
+        onErr
+      );
+    },
+    onErr
+  );
 }
 
 /**
