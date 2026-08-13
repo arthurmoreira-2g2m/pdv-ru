@@ -22,15 +22,11 @@
     <preference name="DisallowOverscroll" value="true" />
     <preference name="BackgroundColor" value="#ffffff" />
 
-    <!-- Android Specific Permissions for Printing & Storage -->
-    <plugin name="cordova-plugin-whitelist" spec="^1.3.5" />
-
     <!-- Plugin nativo Gertec/Topwise: fala diretamente com o SDK real da
          impressora térmica embutida do SK210 via AIDL. Ver plugins/cordova-plugin-gertec-printer. -->
     <plugin name="cordova-plugin-gertec-printer" spec="../plugins/cordova-plugin-gertec-printer" />
 
-    <!-- Hook que corrige os imports do cordova-plugin-printer para AndroidX
-         (o pacote original ainda usa android.support.*, incompatível com
-         builds Cordova Android atuais). Ver hooks/fix-printer-androidx.js -->
+    <!-- Hook que corrige eventuais imports pendentes de AndroidX em
+         plugins de terceiros. Ver hooks/fix-printer-androidx.js -->
     <hook type="after_prepare" src="hooks/fix-printer-androidx.js" />
 </widget>

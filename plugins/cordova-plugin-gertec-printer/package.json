@@ -1,0 +1,18 @@
+{
+  "name": "cordova-plugin-gertec-printer",
+  "version": "1.0.0",
+  "description": "Ponte nativa para a impressora térmica embutida em totens Gertec (SK210 e compatíveis), via SDK Topwise CloudPOS (AIDL).",
+  "cordova": {
+    "id": "cordova-plugin-gertec-printer",
+    "platforms": [
+      "android"
+    ]
+  },
+  "keywords": [
+    "cordova",
+    "gertec",
+    "printer",
+    "sk210"
+  ],
+  "license": "Apache-2.0"
+}

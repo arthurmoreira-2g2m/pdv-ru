@@ -50,13 +50,9 @@ jobs:
       - name: Copiar hooks de correção (AndroidX etc.)
         run: cp -r hooks cordova-project/hooks
 
-      - name: Adicionar plataforma Android
+      - name: Adicionar plataforma Android (já instala os plugins declarados no config.xml)
         working-directory: cordova-project
         run: cordova platform add android
-
-      - name: Adicionar plugin nativo da impressora Gertec/Topwise
-        working-directory: cordova-project
-        run: cordova plugin add ../plugins/cordova-plugin-gertec-printer
 
       - name: Compilar APK (debug)
         working-directory: cordova-project
