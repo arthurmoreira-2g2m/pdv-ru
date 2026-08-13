@@ -123,10 +123,10 @@ function imprimirViaGertecReal(gertec: any, c: CouponData): void {
       gertec.printText({ text: '2G2M REFEITORIO', align: 1, bold: true, fontSize: 16 }, () => {}, onErr);
       gertec.printText({ text: `Data: ${c.dataHoraFormatada}`, align: 1, fontSize: 8 }, () => {}, onErr);
       gertec.printText({ text: '--------------------------------', align: 1, fontSize: 8 }, () => {}, onErr);
-      gertec.printText({ text: `SERVICO: ${c.servicoNome.toUpperCase()}`, align: 0, fontSize: 8 }, () => {}, onErr);
-      gertec.printText({ text: `ALUNO: ${c.alunoNome.toUpperCase()}`, align: 0, fontSize: 8 }, () => {}, onErr);
-      gertec.printText({ text: `CURSO: ${c.alunoCurso.toUpperCase()}`, align: 0, fontSize: 8 }, () => {}, onErr);
-      gertec.printText({ text: `MATRICULA: ${c.alunoMatricula}`, align: 0, fontSize: 8 }, () => {}, onErr);
+      gertec.printText({ text: `SERVICO: ${c.servicoNome.toUpperCase()}`, align: 0, fontSize: 8, bold: true }, () => {}, onErr);
+      gertec.printText({ text: `ALUNO: ${c.alunoNome.toUpperCase()}`, align: 0, fontSize: 8, bold: true }, () => {}, onErr);
+      gertec.printText({ text: `CURSO: ${c.alunoCurso.toUpperCase()}`, align: 0, fontSize: 8, bold: true }, () => {}, onErr);
+      gertec.printText({ text: `MATRICULA: ${c.alunoMatricula}`, align: 0, fontSize: 8, bold: true }, () => {}, onErr);
       gertec.printText({ text: '--------------------------------', align: 1, fontSize: 8 }, () => {}, onErr);
       gertec.printText(
         { text: c.statusLinha, align: 1, bold: true, fontSize: c.isTotalGratis ? 24 : 16 },
@@ -137,7 +137,7 @@ function imprimirViaGertecReal(gertec: any, c: CouponData): void {
       gertec.printText({ text: 'Obrigado! Bom apetite.', align: 1, fontSize: 8 }, () => {}, onErr);
 
       gertec.finishTransaction(
-        true, // corta o papel ao final
+        { cut: true, cutMode: 'semi', feedLines: 6 }, // corte semiautomático + ~1cm de folga antes do corte
         () => console.log('[GertecPrinter] Cupom impresso com sucesso.'),
         onErr
       );

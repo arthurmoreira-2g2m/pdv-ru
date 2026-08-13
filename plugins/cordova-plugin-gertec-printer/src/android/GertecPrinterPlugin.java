@@ -290,7 +290,14 @@ public class GertecPrinterPlugin extends CordovaPlugin {
 
     private boolean handleFinishTransaction(JSONArray args, CallbackContext callbackContext) {
         try {
-            boolean canCut = args.length() == 0 || args.optBoolean(0, true);
+            JSONObject opts = args.optJSONObject(0);
+            final boolean canCut = opts == null || opts.optBoolean("cut", true);
+            final boolean semiCorte = opts == null || !"full".equalsIgnoreCase(opts.optString("cutMode", "semi"));
+            // Cada linha em branco com lineHeight ~29 avança aproximadamente
+            // 3,5-4mm no SK210 (calibrado empiricamente). 6 linhas ≈ 1cm de
+            // folga antes do corte, para não cortar em cima do texto.
+            final int feedLines = opts != null ? opts.optInt("feedLines", 6) : 6;
+
             printer.printRuiQueue(new AidlPrinterListener.Stub() {
                 @Override
                 public void onError(int i) throws RemoteException {
@@ -300,16 +307,23 @@ public class GertecPrinterPlugin extends CordovaPlugin {
                 @Override
                 public void onPrintFinish() throws RemoteException {
                     try {
-                        // Pequeno avanço de papel antes do corte, para não cortar em cima do texto
+                        // Avanço de papel (folga) antes do corte, para não cortar em cima do texto
                         List<PrintItemObj> items = new ArrayList<>();
                         PrintItemObj blank = new PrintItemObj("");
                         blank.setFontSize(0);
-                        items.add(blank);
-                        items.add(blank);
+                        blank.setLineHeight(29);
+                        for (int i = 0; i < feedLines; i++) {
+                            items.add(blank);
+                        }
                         printer.addRuiText(items);
                         printer.printRuiQueue(null);
                         if (canCut) {
-                            printer.cuttingPaper(PrintCuttingMode.CUTTING_MODE_FULL);
+                            // Corte semiautomático (parcial) por padrão: menos estresse
+                            // mecânico na guilhotina e reduz risco de atolamento/corte
+                            // em cima da informação. Corte total só se explicitamente pedido.
+                            printer.cuttingPaper(
+                                semiCorte ? PrintCuttingMode.CUTTING_MODE_HALT : PrintCuttingMode.CUTTING_MODE_FULL
+                            );
                         }
                     } catch (Exception e) {
                         Log.e(TAG, "Erro ao finalizar transação de impressão", e);

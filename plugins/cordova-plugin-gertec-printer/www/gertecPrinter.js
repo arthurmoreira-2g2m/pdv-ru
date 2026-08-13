@@ -40,8 +40,11 @@ var GertecPrinter = {
     exec(success, error, PLUGIN_NAME, 'startTransaction', []);
   },
 
-  finishTransaction: function (canCut, success, error) {
-    exec(success, error, PLUGIN_NAME, 'finishTransaction', [canCut]);
+  /**
+   * @param {Object} opts { cut: boolean, cutMode: 'semi'|'full', feedLines: number }
+   */
+  finishTransaction: function (opts, success, error) {
+    exec(success, error, PLUGIN_NAME, 'finishTransaction', [opts]);
   },
 };
 
