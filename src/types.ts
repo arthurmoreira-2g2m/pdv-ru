@@ -45,10 +45,9 @@ export interface Venda {
 }
 
 export interface ConfiguracoesSistema {
-  emailjsServiceId: string;
-  emailjsTemplateId: string;
-  emailjsPublicKey: string;
-  emailjsDestinatario: string;
+  backendEmailUrl: string;
+  backendEmailApiKey: string;
+  emailDestinatario: string;
   adminPasswordHash: string;
   exigirTrocaSenhaPadrao: boolean;
 }

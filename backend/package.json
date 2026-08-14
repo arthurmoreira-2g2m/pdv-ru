@@ -1,0 +1,17 @@
+{
+  "name": "pdv-2g2m-email-backend",
+  "version": "1.0.0",
+  "description": "Backend minimo (Nodemailer) para envio de e-mails de fechamento/recuperacao do sistema PDV 2G2M",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "nodemailer": "^6.9.14"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

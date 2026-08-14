@@ -7,6 +7,8 @@ import {
   FechamentoReport, 
   SendEmailResult 
 } from '../../services/emailService';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { 
   Mail, 
   Send, 
@@ -68,6 +70,72 @@ export const TabFechamentos: React.FC = () => {
     setLoading(false);
   };
 
+  // Export to PDF (jsPDF) — mesmo padrão visual usado em Recuperação/Vendas
+  const handleGerarPdf = (report: FechamentoReport | null) => {
+    if (!report) return;
+
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(15);
+    doc.setTextColor(185, 28, 28);
+    doc.text('2G2M GESTÃO DE REFEITÓRIOS', 14, 16);
+
+    doc.setFontSize(11);
+    doc.setTextColor(31, 41, 55);
+    doc.text(report.tipo === 'DIARIO' ? 'Fechamento Diário de Vendas' : 'Fechamento Mensal de Vendas', 14, 22);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(107, 114, 128);
+    doc.text(`Período de Referência: ${report.periodoRotulo}`, 14, 27);
+    doc.text(`Emissão: ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}`, 14, 31);
+
+    doc.setLineWidth(0.5);
+    doc.setDrawColor(229, 231, 235);
+    doc.line(14, 34, 196, 34);
+
+    doc.setFillColor(243, 244, 246);
+    doc.rect(14, 37, 182, 22, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(17, 24, 39);
+    doc.text(`Total de Acessos: ${report.totalVendasCount}`, 18, 44);
+    doc.text(`Total Bruto (Base): R$ ${report.totalBrutoBase.toFixed(2).replace('.', ',')}`, 18, 50);
+    doc.setTextColor(220, 38, 38);
+    doc.text(`Cobrado dos Alunos: R$ ${report.totalCobradoAlunos.toFixed(2).replace('.', ',')}`, 100, 44);
+    doc.setTextColor(16, 185, 129);
+    doc.text(`Subsídio Concedido: R$ ${report.totalSubsidioDescontos.toFixed(2).replace('.', ',')}`, 100, 50);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.setTextColor(31, 41, 55);
+    doc.text('Resumo por Serviço', 14, 68);
+
+    const tableData = report.porServico.map((s) => [
+      s.servicoNome,
+      `${s.quantidade}x`,
+      `R$ ${s.totalCobrado.toFixed(2).replace('.', ',')}`,
+      `R$ ${s.totalSubsidio.toFixed(2).replace('.', ',')}`,
+    ]);
+
+    autoTable(doc, {
+      startY: 71,
+      head: [['Serviço', 'Qtd.', 'Total Cobrado Alunos', 'Total Subsídio']],
+      body: tableData.length > 0 ? tableData : [['Nenhum acesso registrado no período.', '-', '-', '-']],
+      theme: 'grid',
+      headStyles: { fillColor: [220, 38, 38], textColor: 255, fontStyle: 'bold', fontSize: 8.5 },
+      bodyStyles: { fontSize: 8 },
+      columnStyles: {
+        2: { fontStyle: 'bold', textColor: [220, 38, 38] },
+        3: { fontStyle: 'bold', textColor: [16, 185, 129] },
+      },
+    });
+
+    const tipoLabel = report.tipo === 'DIARIO' ? 'Diario' : 'Mensal';
+    doc.save(`Fechamento_${tipoLabel}_2G2M_${new Date().toISOString().split('T')[0]}.pdf`);
+  };
+
   return (
     <div className="space-y-6">
       
@@ -76,7 +144,7 @@ export const TabFechamentos: React.FC = () => {
         <div>
           <h3 className="text-xl font-black text-gray-900 flex items-center gap-2">
             <Mail className="w-6 h-6 text-red-600" />
-            <span>Fechamentos de Vendas (E-mail EmailJS)</span>
+            <span>Fechamentos de Vendas (E-mail via Backend)</span>
           </h3>
           <p className="text-xs text-gray-500 font-medium mt-0.5">
             Gere e envie relatórios consolidados de fechamento diário e mensal por e-mail
@@ -96,12 +164,12 @@ export const TabFechamentos: React.FC = () => {
       </div>
 
       {/* Config Notification Notice if keys are missing */}
-      {config && (!config.emailjsServiceId || !config.emailjsTemplateId || !config.emailjsPublicKey) && (
+      {config && !config.backendEmailUrl && (
         <div className="p-4 bg-red-50 border-l-4 border-red-500 rounded-r-xl text-xs text-red-900 font-semibold flex items-center justify-between">
           <div className="flex items-center gap-2">
             <AlertCircle className="w-5 h-5 text-red-600 shrink-0" />
             <span>
-              <strong>Envio de E-mail Desativado:</strong> As chaves do EmailJS (Service ID, Template ID ou Public Key) não foram configuradas. Acesse o menu <strong>Configurações</strong> para cadastrar as chaves do EmailJS.
+              <strong>Envio de E-mail Desativado:</strong> A URL do backend de e-mail (Nodemailer) não foi configurada. Acesse o menu <strong>Configurações</strong> para informar a URL do backend e a chave de API.
             </span>
           </div>
           <span className="text-[10px] uppercase font-mono bg-red-200 text-red-900 px-2 py-1 rounded font-bold">Configuração Incompleta</span>
@@ -178,14 +246,24 @@ export const TabFechamentos: React.FC = () => {
               </div>
             </div>
 
-            <button
-              onClick={() => handleEnviarEmail(reportDiario)}
-              disabled={loading}
-              className="w-full bg-red-600 hover:bg-red-700 active:bg-red-800 text-white font-black py-3.5 rounded-xl shadow transition-all flex items-center justify-center gap-2 uppercase tracking-wide text-xs cursor-pointer"
-            >
-              <Send className="w-4 h-4" />
-              <span>Enviar Fechamento Diário por E-mail</span>
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => handleGerarPdf(reportDiario)}
+                className="flex items-center justify-center gap-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-3.5 px-4 rounded-xl transition-all text-xs shrink-0"
+                title="Gerar PDF do fechamento diário"
+              >
+                <FileText className="w-4 h-4 text-red-600" />
+                <span>PDF</span>
+              </button>
+              <button
+                onClick={() => handleEnviarEmail(reportDiario)}
+                disabled={loading}
+                className="flex-1 bg-red-600 hover:bg-red-700 active:bg-red-800 text-white font-black py-3.5 rounded-xl shadow transition-all flex items-center justify-center gap-2 uppercase tracking-wide text-xs cursor-pointer"
+              >
+                <Send className="w-4 h-4" />
+                <span>Enviar Fechamento Diário por E-mail</span>
+              </button>
+            </div>
           </div>
         )}
 
@@ -231,14 +309,24 @@ export const TabFechamentos: React.FC = () => {
               </div>
             </div>
 
-            <button
-              onClick={() => handleEnviarEmail(reportMensal)}
-              disabled={loading}
-              className="w-full bg-gray-900 hover:bg-gray-800 active:bg-black text-white font-black py-3.5 rounded-xl shadow transition-all flex items-center justify-center gap-2 uppercase tracking-wide text-xs cursor-pointer"
-            >
-              <Send className="w-4 h-4 text-red-500" />
-              <span>Enviar Fechamento Mensal por E-mail</span>
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => handleGerarPdf(reportMensal)}
+                className="flex items-center justify-center gap-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-3.5 px-4 rounded-xl transition-all text-xs shrink-0"
+                title="Gerar PDF do fechamento mensal"
+              >
+                <FileText className="w-4 h-4 text-red-600" />
+                <span>PDF</span>
+              </button>
+              <button
+                onClick={() => handleEnviarEmail(reportMensal)}
+                disabled={loading}
+                className="flex-1 bg-gray-900 hover:bg-gray-800 active:bg-black text-white font-black py-3.5 rounded-xl shadow transition-all flex items-center justify-center gap-2 uppercase tracking-wide text-xs cursor-pointer"
+              >
+                <Send className="w-4 h-4 text-red-500" />
+                <span>Enviar Fechamento Mensal por E-mail</span>
+              </button>
+            </div>
           </div>
         )}
 

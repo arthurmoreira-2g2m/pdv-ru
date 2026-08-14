@@ -14,10 +14,9 @@ import {
 
 export const TabConfiguracoes: React.FC = () => {
   const [config, setConfig] = useState<ConfiguracoesSistema>({
-    emailjsServiceId: '',
-    emailjsTemplateId: '',
-    emailjsPublicKey: '',
-    emailjsDestinatario: 'financeiro@2g2m.com.br',
+    backendEmailUrl: '',
+    backendEmailApiKey: '',
+    emailDestinatario: 'financeiro@2g2m.com.br',
     adminPasswordHash: '2g2m@2g2m',
     exigirTrocaSenhaPadrao: false,
   });
@@ -109,57 +108,46 @@ export const TabConfiguracoes: React.FC = () => {
 
       <form onSubmit={handleSaveAll} className="space-y-6">
         
-        {/* EMAILJS SETTINGS */}
+        {/* BACKEND EMAIL (NODEMAILER) SETTINGS */}
         <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-4">
           <div className="flex items-center space-x-2 text-gray-900 font-black text-base border-b border-gray-100 pb-3">
             <Mail className="w-5 h-5 text-red-600" />
-            <span>Integrador de E-mail (EmailJS)</span>
+            <span>Envio de E-mail (Backend Nodemailer)</span>
           </div>
 
           <p className="text-xs text-gray-500">
-            Cadastre suas chaves gratuitas do <strong className="text-gray-900">EmailJS (emailjs.com)</strong> para habilitar os disparos dos e-mails de fechamento.
+            Informe o endereço do backend próprio (Node.js + Nodemailer) responsável por enviar os e-mails de fechamento/recuperação, e a chave de API configurada nele.
           </p>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-bold">
             <div>
-              <label className="block text-gray-700 uppercase mb-1">Service ID</label>
+              <label className="block text-gray-700 uppercase mb-1">URL do Backend</label>
               <input
                 type="text"
-                value={config.emailjsServiceId}
-                onChange={(e) => setConfig({ ...config, emailjsServiceId: e.target.value })}
-                placeholder="Ex: service_2g2m"
+                value={config.backendEmailUrl}
+                onChange={(e) => setConfig({ ...config, backendEmailUrl: e.target.value })}
+                placeholder="Ex: https://pdv-2g2m-email.onrender.com"
                 className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl font-mono text-xs focus:outline-none focus:border-red-600"
               />
             </div>
 
             <div>
-              <label className="block text-gray-700 uppercase mb-1">Template ID</label>
+              <label className="block text-gray-700 uppercase mb-1">Chave de API</label>
               <input
                 type="text"
-                value={config.emailjsTemplateId}
-                onChange={(e) => setConfig({ ...config, emailjsTemplateId: e.target.value })}
-                placeholder="Ex: template_fechamento"
+                value={config.backendEmailApiKey}
+                onChange={(e) => setConfig({ ...config, backendEmailApiKey: e.target.value })}
+                placeholder="Mesma chave definida em API_KEY no backend"
                 className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl font-mono text-xs focus:outline-none focus:border-red-600"
               />
             </div>
 
-            <div>
-              <label className="block text-gray-700 uppercase mb-1">Public Key (User ID)</label>
-              <input
-                type="text"
-                value={config.emailjsPublicKey}
-                onChange={(e) => setConfig({ ...config, emailjsPublicKey: e.target.value })}
-                placeholder="Ex: pk_live_xyz..."
-                className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl font-mono text-xs focus:outline-none focus:border-red-600"
-              />
-            </div>
-
-            <div>
+            <div className="md:col-span-2">
               <label className="block text-gray-700 uppercase mb-1">E-mail Destinatário dos Fechamentos</label>
               <input
                 type="email"
-                value={config.emailjsDestinatario}
-                onChange={(e) => setConfig({ ...config, emailjsDestinatario: e.target.value })}
+                value={config.emailDestinatario}
+                onChange={(e) => setConfig({ ...config, emailDestinatario: e.target.value })}
                 placeholder="Ex: financeiro@2g2m.com.br"
                 className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-red-600"
               />

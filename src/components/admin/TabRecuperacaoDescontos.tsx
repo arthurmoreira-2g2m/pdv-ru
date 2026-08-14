@@ -90,6 +90,31 @@ export const TabRecuperacaoDescontos: React.FC = () => {
     (a, b) => b.percentualDesconto - a.percentualDesconto
   );
 
+  // Calculate Grouping by Serviço (Almoço, Jantar, etc.)
+  const agrupamentoPorServico: Record<
+    string,
+    { servicoNome: string; quantidade: number; valorBaseTotal: number; valorSubsidioTotal: number }
+  > = {};
+
+  for (const v of vendasFiltradas) {
+    const key = v.servicoNome || 'Não informado';
+    if (!agrupamentoPorServico[key]) {
+      agrupamentoPorServico[key] = {
+        servicoNome: key,
+        quantidade: 0,
+        valorBaseTotal: 0,
+        valorSubsidioTotal: 0,
+      };
+    }
+    agrupamentoPorServico[key].quantidade += 1;
+    agrupamentoPorServico[key].valorBaseTotal += v.precoBase || 0;
+    agrupamentoPorServico[key].valorSubsidioTotal += v.valorSubsidio || 0;
+  }
+
+  const listaServicosSubsidio = Object.values(agrupamentoPorServico).sort(
+    (a, b) => b.valorSubsidioTotal - a.valorSubsidioTotal
+  );
+
   // Print Document
   const handlePrintReport = () => {
     window.print();
@@ -172,13 +197,41 @@ export const TabRecuperacaoDescontos: React.FC = () => {
       },
     });
 
-    // Table 2: Itemized Sales
+    // Table 2: Service Summary
+    const finalYServ = (doc as any).lastAutoTable?.finalY || 100;
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.setTextColor(31, 41, 55);
+    doc.text('2. Consolidado por Serviço', 14, finalYServ + 10);
+
+    const tableServData = listaServicosSubsidio.map((s) => [
+      s.servicoNome,
+      `${s.quantidade} acessos`,
+      `R$ ${s.valorBaseTotal.toFixed(2).replace('.', ',')}`,
+      `R$ ${s.valorSubsidioTotal.toFixed(2).replace('.', ',')}`,
+    ]);
+
+    autoTable(doc, {
+      startY: finalYServ + 13,
+      head: [['Serviço', 'Qtd. Refeições', 'Valor Base Total', 'Valor Reembolso']],
+      body: tableServData,
+      theme: 'grid',
+      headStyles: { fillColor: [220, 38, 38], textColor: 255, fontStyle: 'bold', fontSize: 8.5 },
+      bodyStyles: { fontSize: 8 },
+      columnStyles: {
+        0: { fontStyle: 'bold' },
+        3: { fontStyle: 'bold', textColor: [16, 185, 129], halign: 'right' },
+      },
+    });
+
+    // Table 3: Itemized Sales
     const finalY1 = (doc as any).lastAutoTable?.finalY || 100;
 
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(10);
     doc.setTextColor(31, 41, 55);
-    doc.text('2. Relação Analítica de Atendimentos', 14, finalY1 + 10);
+    doc.text('3. Relação Analítica de Atendimentos', 14, finalY1 + 10);
 
     const table2Data = vendasFiltradas.map((v) => [
       v.id || '-',
@@ -245,6 +298,7 @@ export const TabRecuperacaoDescontos: React.FC = () => {
           totalAtendimentos: totalGeralAtendimentos,
           totalSubsidio: totalGeralSubsidio,
           resumoPlanos: listaPlanosSubsidio,
+          resumoServicos: listaServicosSubsidio,
           vendasDetalhadas: vendasFiltradas,
         },
         config
@@ -509,6 +563,46 @@ export const TabRecuperacaoDescontos: React.FC = () => {
                     <tr key={item.planoCodigo} className="hover:bg-gray-50">
                       <td className="px-4 py-3 font-bold text-gray-900">{item.planoCodigo}</td>
                       <td className="px-4 py-3 font-extrabold text-red-600">{item.percentualDesconto}% desc</td>
+                      <td className="px-4 py-3 font-bold">{item.quantidade} acessos</td>
+                      <td className="px-4 py-3 font-mono">R$ {item.valorBaseTotal.toFixed(2).replace('.', ',')}</td>
+                      <td className="px-4 py-3 text-right font-black text-emerald-600 text-sm">
+                        R$ {item.valorSubsidioTotal.toFixed(2).replace('.', ',')}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Breakdown Table by Serviço */}
+        <div className="space-y-3">
+          <h4 className="text-sm font-black text-gray-900 uppercase tracking-wide">
+            Consolidado por Serviço
+          </h4>
+
+          <div className="border border-gray-200 rounded-2xl overflow-hidden">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-gray-50 border-b border-gray-200 text-gray-700 font-extrabold uppercase">
+                <tr>
+                  <th className="px-4 py-3">Serviço</th>
+                  <th className="px-4 py-3">Qtd. Refeições</th>
+                  <th className="px-4 py-3">Valor Base Total</th>
+                  <th className="px-4 py-3 text-right">Valor do Reembolso</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 font-medium text-gray-800">
+                {listaServicosSubsidio.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="px-4 py-6 text-center text-gray-500">
+                      Nenhum registro de venda para calcular reembolso.
+                    </td>
+                  </tr>
+                ) : (
+                  listaServicosSubsidio.map((item) => (
+                    <tr key={item.servicoNome} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 font-bold text-gray-900 uppercase">{item.servicoNome}</td>
                       <td className="px-4 py-3 font-bold">{item.quantidade} acessos</td>
                       <td className="px-4 py-3 font-mono">R$ {item.valorBaseTotal.toFixed(2).replace('.', ',')}</td>
                       <td className="px-4 py-3 text-right font-black text-emerald-600 text-sm">

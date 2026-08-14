@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Venda } from '../../types';
-import { getAllVendas, clearAllVendas } from '../../db/indexedDB';
+import { Venda, ConfiguracoesSistema } from '../../types';
+import { getAllVendas, clearAllVendas, getConfiguracoes } from '../../db/indexedDB';
 import * as XLSX from 'xlsx';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import { enviarVendasPeriodoEmail, SendEmailResult } from '../../services/emailService';
 import { 
   Receipt, 
   Search, 
@@ -9,7 +12,12 @@ import {
   Trash2, 
   Calendar, 
   DollarSign, 
-  Utensils 
+  Utensils,
+  FileText,
+  Mail,
+  Loader2,
+  CheckCircle,
+  AlertCircle
 } from 'lucide-react';
 
 export const TabVendas: React.FC = () => {
@@ -115,8 +123,123 @@ export const TabVendas: React.FC = () => {
     }
   };
 
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [emailStatus, setEmailStatus] = useState<{ msg: string; isError: boolean } | null>(null);
+
+  const handleEnviarEmail = async () => {
+    setEmailStatus(null);
+    setIsSendingEmail(true);
+    try {
+      const config: ConfiguracoesSistema = await getConfiguracoes();
+      const periodoRotulo =
+        dataInicio || dataFim ? `De ${dataInicio || 'Início'} até ${dataFim || 'Atual'}` : 'Período Completo Acumulado';
+
+      const result: SendEmailResult = await enviarVendasPeriodoEmail(
+        {
+          periodoRotulo,
+          vendas: vendasFiltradas,
+          totalCobradoAlunos,
+          totalSubsidio,
+          totalBruto,
+        },
+        config
+      );
+      setEmailStatus({ msg: result.mensagem, isError: !result.sucesso });
+    } catch (err: any) {
+      setEmailStatus({ msg: `Falha ao processar envio: ${err?.message || 'erro desconhecido'}`, isError: true });
+    } finally {
+      setIsSendingEmail(false);
+    }
+  };
+
+  // Export to PDF (jsPDF) — mesmo padrão visual usado em Recuperação
+  const handleExportPdf = () => {
+    const periodoRotulo = dataInicio || dataFim
+      ? `De ${dataInicio || 'Início'} até ${dataFim || 'Atual'}`
+      : 'Período Completo Acumulado';
+
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(15);
+    doc.setTextColor(185, 28, 28);
+    doc.text('2G2M GESTÃO DE REFEITÓRIOS', 14, 16);
+
+    doc.setFontSize(11);
+    doc.setTextColor(31, 41, 55);
+    doc.text('Registro de Vendas', 14, 22);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(107, 114, 128);
+    doc.text(`Período: ${periodoRotulo}`, 14, 27);
+    doc.text(`Emissão: ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}`, 14, 31);
+
+    doc.setLineWidth(0.5);
+    doc.setDrawColor(229, 231, 235);
+    doc.line(14, 34, 283, 34);
+
+    doc.setFillColor(243, 244, 246);
+    doc.rect(14, 37, 269, 16, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(17, 24, 39);
+    doc.text(`Total de Acessos: ${vendasFiltradas.length}`, 18, 43);
+    doc.text(`Cobrado dos Alunos: R$ ${totalCobradoAlunos.toFixed(2).replace('.', ',')}`, 100, 43);
+    doc.setTextColor(16, 185, 129);
+    doc.text(`Subsídio Concedido: R$ ${totalSubsidio.toFixed(2).replace('.', ',')}`, 190, 43);
+
+    const tableData = vendasFiltradas.map((v) => [
+      v.id || '-',
+      new Date(v.dataHora).toLocaleString('pt-BR'),
+      v.alunoMatricula || '-',
+      v.alunoNome || '-',
+      v.alunoCurso || '-',
+      v.servicoNome || '-',
+      `${v.planoCodigo} (${v.percentualDesconto}%)`,
+      v.percentualDesconto === 100 ? 'GRÁTIS' : `R$ ${(v.valorCobradoAluno || 0).toFixed(2).replace('.', ',')}`,
+      `R$ ${(v.valorSubsidio || 0).toFixed(2).replace('.', ',')}`,
+    ]);
+
+    autoTable(doc, {
+      startY: 58,
+      head: [['ID', 'Data/Hora', 'Matrícula', 'Aluno', 'Curso', 'Serviço', 'Plano', 'Cobrado Aluno', 'Subsídio']],
+      body: tableData,
+      theme: 'striped',
+      headStyles: { fillColor: [220, 38, 38], textColor: 255, fontStyle: 'bold', fontSize: 8 },
+      bodyStyles: { fontSize: 7.5 },
+      columnStyles: {
+        7: { fontStyle: 'bold', textColor: [220, 38, 38] },
+        8: { fontStyle: 'bold', textColor: [16, 185, 129] },
+      },
+    });
+
+    doc.save(`Registro_Vendas_2G2M_${new Date().toISOString().split('T')[0]}.pdf`);
+  };
+
   return (
     <div className="space-y-6">
+
+      {/* Email Status Banner */}
+      {emailStatus && (
+        <div
+          className={`p-4 rounded-2xl border text-xs font-bold flex items-center justify-between gap-3 ${
+            emailStatus.isError ? 'bg-red-50 text-red-900 border-red-200' : 'bg-emerald-50 text-emerald-900 border-emerald-200'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            {emailStatus.isError ? (
+              <AlertCircle className="w-5 h-5 text-red-600 shrink-0" />
+            ) : (
+              <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0" />
+            )}
+            <span>{emailStatus.msg}</span>
+          </div>
+          <button onClick={() => setEmailStatus(null)} className="text-xs underline font-black hover:opacity-80 shrink-0">
+            Fechar
+          </button>
+        </div>
+      )}
       
       {/* Top Banner & Stats */}
       <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
@@ -137,6 +260,23 @@ export const TabVendas: React.FC = () => {
           >
             <Download className="w-4 h-4" />
             <span>Exportar Excel</span>
+          </button>
+
+          <button
+            onClick={handleExportPdf}
+            className="flex items-center gap-1.5 bg-red-600 hover:bg-red-700 text-white font-extrabold px-4 py-2.5 rounded-xl text-xs transition-all shadow"
+          >
+            <FileText className="w-4 h-4" />
+            <span>Exportar PDF</span>
+          </button>
+
+          <button
+            onClick={handleEnviarEmail}
+            disabled={isSendingEmail}
+            className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold px-4 py-2.5 rounded-xl text-xs transition-all shadow disabled:opacity-50"
+          >
+            {isSendingEmail ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
+            <span>Enviar por E-mail</span>
           </button>
 
           <button

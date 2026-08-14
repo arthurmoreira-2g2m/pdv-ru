@@ -195,10 +195,9 @@ export async function initializeDatabaseSeed(): Promise<void> {
   const configService = await getConfiguracoes();
   if (!configService.adminPasswordHash) {
     await saveConfiguracoes({
-      emailjsServiceId: '',
-      emailjsTemplateId: '',
-      emailjsPublicKey: '',
-      emailjsDestinatario: 'financeiro@2g2m.com.br',
+      backendEmailUrl: '',
+      backendEmailApiKey: '',
+      emailDestinatario: 'financeiro@2g2m.com.br',
       adminPasswordHash: '2g2m@2g2m', // default admin pin
       exigirTrocaSenhaPadrao: false,
     });
@@ -348,10 +347,9 @@ export async function getConfiguracoes(): Promise<ConfiguracoesSistema> {
     return item.value;
   }
   return {
-    emailjsServiceId: '',
-    emailjsTemplateId: '',
-    emailjsPublicKey: '',
-    emailjsDestinatario: 'financeiro@2g2m.com.br',
+    backendEmailUrl: '',
+    backendEmailApiKey: '',
+    emailDestinatario: 'financeiro@2g2m.com.br',
     adminPasswordHash: '2g2m@2g2m',
     exigirTrocaSenhaPadrao: false,
   };

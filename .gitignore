@@ -3,3 +3,5 @@ dist/
 .env
 .env.local
 cordova-project/
+backend/node_modules/
+backend/.env
