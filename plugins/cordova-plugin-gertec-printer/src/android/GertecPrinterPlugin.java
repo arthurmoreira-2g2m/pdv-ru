@@ -68,6 +68,8 @@ public class GertecPrinterPlugin extends CordovaPlugin {
         switch (action) {
             case "printText":
                 return handlePrintText(args, callbackContext);
+            case "printReceipt":
+                return handlePrintReceipt(args, callbackContext);
             case "printQRCode":
                 return handlePrintQRCode(args, callbackContext);
             case "printBarCode":
@@ -153,31 +155,9 @@ public class GertecPrinterPlugin extends CordovaPlugin {
         try {
             JSONObject opts = args.optJSONObject(0);
             String text = opts != null ? opts.optString("text", "") : args.optString(0, "");
-            int fontSize = opts != null ? opts.optInt("fontSize", PrinterConstant.FontSize.NORMAL) : PrinterConstant.FontSize.NORMAL;
-            boolean bold = opts != null && opts.optBoolean("bold", false);
-            boolean underline = opts != null && opts.optBoolean("underline", false);
-            boolean wordWrap = opts == null || opts.optBoolean("wordwrap", true);
-            int align = opts != null ? opts.optInt("align", 0) : 0; // 0=LEFT, 1=CENTER, 2=RIGHT
-            int letterSpacing = opts != null ? opts.optInt("letterSpacing", 0) : 0;
-            int marginLeft = opts != null ? opts.optInt("marginLeft", 0) : 0;
-            int lineHeight = opts != null ? opts.optInt("lineHeight", 29) : 29;
-
-            PrintItemObj item = new PrintItemObj(text);
-            item.setLetterSpacing(letterSpacing);
-            item.setLineHeight(lineHeight);
-            item.setMarginLeft(marginLeft);
-            item.setBold(bold);
-            item.setUnderline(underline);
-            item.setFontSize(fontSize);
-            item.setWordWrap(wordWrap);
-
-            PrintItemObj.ALIGN alignEnum = PrintItemObj.ALIGN.LEFT;
-            if (align == 1) alignEnum = PrintItemObj.ALIGN.CENTER;
-            if (align == 2) alignEnum = PrintItemObj.ALIGN.RIGHT;
-            item.setAlign(alignEnum);
 
             List<PrintItemObj> items = new ArrayList<>();
-            items.add(item);
+            items.add(buildPrintItem(text, opts));
 
             printer.addRuiText(items);
             printer.printRuiQueue(printListener);
@@ -186,6 +166,112 @@ public class GertecPrinterPlugin extends CordovaPlugin {
         } catch (Exception e) {
             Log.e(TAG, "Erro em printText", e);
             callbackContext.error("Erro ao imprimir texto: " + e.getMessage());
+        }
+        return true;
+    }
+
+    /**
+     * Constrói um PrintItemObj a partir de um JSONObject de opções vindo do JS.
+     * Compartilhado entre printText (linha única) e printReceipt (lote).
+     */
+    private PrintItemObj buildPrintItem(String text, JSONObject opts) {
+        int fontSize = opts != null ? opts.optInt("fontSize", PrinterConstant.FontSize.NORMAL) : PrinterConstant.FontSize.NORMAL;
+        boolean bold = opts != null && opts.optBoolean("bold", false);
+        boolean underline = opts != null && opts.optBoolean("underline", false);
+        boolean wordWrap = opts == null || opts.optBoolean("wordwrap", true);
+        int align = opts != null ? opts.optInt("align", 0) : 0; // 0=LEFT, 1=CENTER, 2=RIGHT
+        int letterSpacing = opts != null ? opts.optInt("letterSpacing", 0) : 0;
+        int marginLeft = opts != null ? opts.optInt("marginLeft", 0) : 0;
+        int lineHeight = opts != null ? opts.optInt("lineHeight", 29) : 29;
+
+        PrintItemObj item = new PrintItemObj(text);
+        item.setLetterSpacing(letterSpacing);
+        item.setLineHeight(lineHeight);
+        item.setMarginLeft(marginLeft);
+        item.setBold(bold);
+        item.setUnderline(underline);
+        item.setFontSize(fontSize);
+        item.setWordWrap(wordWrap);
+
+        PrintItemObj.ALIGN alignEnum = PrintItemObj.ALIGN.LEFT;
+        if (align == 1) alignEnum = PrintItemObj.ALIGN.CENTER;
+        if (align == 2) alignEnum = PrintItemObj.ALIGN.RIGHT;
+        item.setAlign(alignEnum);
+
+        return item;
+    }
+
+    /**
+     * Imprime o cupom inteiro em UM ÚNICO lote (uma chamada addRuiText com
+     * todas as linhas + UMA chamada printRuiQueue), ao invés de uma
+     * chamada separada por linha. Isso evita a condição de corrida em que
+     * várias filas de impressão concorrentes (uma por linha) deixavam o
+     * corte da guilhotina disparar fora de ordem / antes do papel todo
+     * ter sido efetivamente impresso.
+     *
+     * args[0] = { lines: [ {text, align, bold, fontSize, ...}, ... ],
+     *             feedLines: number, cut: boolean, cutMode: 'semi'|'full' }
+     */
+    private boolean handlePrintReceipt(JSONArray args, CallbackContext callbackContext) {
+        try {
+            JSONObject opts = args.optJSONObject(0);
+            if (opts == null) {
+                callbackContext.error("printReceipt requer um objeto de opções com 'lines'.");
+                return true;
+            }
+
+            JSONArray linesJson = opts.optJSONArray("lines");
+            final boolean canCut = opts.optBoolean("cut", true);
+            final boolean semiCorte = !"full".equalsIgnoreCase(opts.optString("cutMode", "full"));
+            final int feedLines = opts.optInt("feedLines", 14);
+
+            List<PrintItemObj> items = new ArrayList<>();
+            if (linesJson != null) {
+                for (int i = 0; i < linesJson.length(); i++) {
+                    JSONObject lineOpts = linesJson.getJSONObject(i);
+                    String text = lineOpts.optString("text", "");
+                    items.add(buildPrintItem(text, lineOpts));
+                }
+            }
+
+            printer.addRuiText(items);
+            printer.printRuiQueue(new AidlPrinterListener.Stub() {
+                @Override
+                public void onError(int i) throws RemoteException {
+                    Log.d(TAG, "onError (printReceipt): " + i);
+                }
+
+                @Override
+                public void onPrintFinish() throws RemoteException {
+                    try {
+                        // Só avança papel + corta DEPOIS que o SDK confirma que
+                        // todo o lote de texto acima já foi de fato impresso.
+                        List<PrintItemObj> feedItems = new ArrayList<>();
+                        PrintItemObj blank = new PrintItemObj("");
+                        blank.setFontSize(0);
+                        blank.setLineHeight(29);
+                        for (int i = 0; i < feedLines; i++) {
+                            feedItems.add(blank);
+                        }
+                        printer.addRuiText(feedItems);
+                        printer.printRuiQueue(null);
+
+                        if (canCut) {
+                            int result = printer.cuttingPaper(
+                                semiCorte ? PrintCuttingMode.CUTTING_MODE_HALT : PrintCuttingMode.CUTTING_MODE_FULL
+                            );
+                            Log.d(TAG, "cuttingPaper() resultado: " + result);
+                        }
+                    } catch (Exception e) {
+                        Log.e(TAG, "Erro ao finalizar impressão em lote (feed/corte)", e);
+                    }
+                }
+            });
+
+            callbackContext.success();
+        } catch (Exception e) {
+            Log.e(TAG, "Erro em printReceipt", e);
+            callbackContext.error("Erro ao imprimir cupom em lote: " + e.getMessage());
         }
         return true;
     }

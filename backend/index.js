@@ -89,6 +89,56 @@ app.post('/api/send-email', checkApiKey, async (req, res) => {
   }
 });
 
+/**
+ * POST /api/fetch-file
+ * body: { url: string }
+ *
+ * Proxy de download server-side, usado pela importação de planilha por
+ * link quando o provedor (ex: OneDrive/SharePoint) bloqueia o download
+ * direto pelo navegador via CORS. Servidor-a-servidor não tem essa
+ * restrição — o app chama este endpoint, que busca o arquivo por trás
+ * e devolve o conteúdo em base64.
+ */
+app.post('/api/fetch-file', checkApiKey, async (req, res) => {
+  const { url } = req.body || {};
+
+  if (!url) {
+    return res.status(400).json({ sucesso: false, mensagem: 'Campo obrigatório ausente: url.' });
+  }
+
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return res.status(400).json({ sucesso: false, mensagem: 'URL inválida — apenas http/https são permitidos.' });
+    }
+
+    const upstream = await fetch(url, { redirect: 'follow' });
+    if (!upstream.ok) {
+      return res.status(502).json({
+        sucesso: false,
+        mensagem: `O servidor de origem respondeu com erro HTTP ${upstream.status}.`,
+      });
+    }
+
+    const contentType = upstream.headers.get('content-type') || 'application/octet-stream';
+    const arrayBuffer = await upstream.arrayBuffer();
+    const base64 = Buffer.from(arrayBuffer).toString('base64');
+
+    return res.json({
+      sucesso: true,
+      contentType,
+      base64,
+      tamanhoBytes: arrayBuffer.byteLength,
+    });
+  } catch (error) {
+    console.error('Erro ao buscar arquivo via proxy:', error);
+    return res.status(500).json({
+      sucesso: false,
+      mensagem: `Falha ao buscar o arquivo: ${error.message || 'erro desconhecido.'}`,
+    });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`[pdv-2g2m-email-backend] rodando na porta ${PORT}`);
 });

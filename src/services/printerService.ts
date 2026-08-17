@@ -87,7 +87,7 @@ export function imprimirCupom(venda: Venda): void {
   const win = typeof window !== 'undefined' ? (window as any) : {};
   const gertec = win.GertecPrinter;
 
-  if (gertec && typeof gertec.startTransaction === 'function') {
+  if (gertec && typeof gertec.printReceipt === 'function') {
     imprimirViaGertecReal(gertec, couponData);
     return;
   }
@@ -110,52 +110,44 @@ export function imprimirCupom(venda: Venda): void {
 }
 
 /**
- * Sequência real de comandos enviados ao plugin nativo Gertec/Topwise,
- * seguindo o padrão de "transação em buffer" (várias chamadas de
- * printText acumuladas, disparadas juntas em finishTransaction).
+ * Sequência real de comandos enviados ao plugin nativo Gertec/Topwise.
  *
- * NOTA DE HARDWARE: a ficha técnica oficial da Gertec para o SK210 lista
- * a impressora apenas como "térmica 58mm, bobina 60mm, 75mm/s, sensor de
- * pouco papel" — sem qualquer menção a guilhotina/corte automático. Ou
- * seja, este modelo não corta o papel sozinho; o aluno rasga na barra
- * serrilhada. Por isso o layout abaixo prioriza: (1) status logo no topo,
- * pra ser a primeira coisa visível mesmo que o rasgo saia torto, e (2)
- * uma folga generosa de papel em branco no final, calibrada para o
- * cupom total ficar perto de 9cm (o comando de corte ainda é chamado,
- * sem custo, para o caso de existir alguma variante com guilhotina —
- * mas não é o que sustenta o fluxo).
+ * Usa `printReceipt` (lote único: todas as linhas de uma vez + UM só
+ * printRuiQueue), em vez de uma chamada `printText` por linha. Isso
+ * elimina a condição de corrida em que múltiplas filas de impressão
+ * concorrentes faziam o corte da guilhotina disparar fora de ordem ou
+ * antes do papel estar totalmente impresso.
+ *
+ * NOTA DE HARDWARE: confirmado que o totem POSSUI guilhotina (corte
+ * automático). A folga de papel abaixo (feedLines) foi recalibrada a
+ * partir de uma medição física real feita no cupom impresso (marcação a
+ * caneta), para o corte não passar em cima da última linha de conteúdo.
  */
 function imprimirViaGertecReal(gertec: any, c: CouponData): void {
   const onErr = (err: any) => console.error('[GertecPrinter] Erro na impressão:', err);
 
-  gertec.startTransaction(
-    () => {
-      gertec.printText({ text: '2G2M REFEITORIO', align: 1, bold: true, fontSize: 16 }, () => {}, onErr);
-      gertec.printText(
-        { text: c.statusLinha, align: 1, bold: true, fontSize: c.isTotalGratis ? 24 : 16 },
-        () => {},
-        onErr
-      );
-      gertec.printText({ text: '--------------------------------', align: 1, fontSize: 8 }, () => {}, onErr);
-      gertec.printText({ text: `Data: ${c.dataHoraFormatada}`, align: 1, fontSize: 8 }, () => {}, onErr);
-      gertec.printText({ text: '--------------------------------', align: 1, fontSize: 8 }, () => {}, onErr);
-      gertec.printText({ text: `SERVICO: ${c.servicoNome.toUpperCase()}`, align: 0, fontSize: 8, bold: true }, () => {}, onErr);
-      gertec.printText({ text: `ALUNO: ${c.alunoNome.toUpperCase()}`, align: 0, fontSize: 8, bold: true }, () => {}, onErr);
-      gertec.printText({ text: `CURSO: ${c.alunoCurso.toUpperCase()}`, align: 0, fontSize: 8, bold: true }, () => {}, onErr);
-      gertec.printText({ text: `MATRICULA: ${c.alunoMatricula}`, align: 0, fontSize: 8, bold: true }, () => {}, onErr);
-      gertec.printText({ text: '--------------------------------', align: 1, fontSize: 8 }, () => {}, onErr);
-      gertec.printText({ text: 'Obrigado! Bom apetite.', align: 1, fontSize: 8 }, () => {}, onErr);
+  const lines = [
+    { text: '2G2M REFEITORIO', align: 1, bold: true, fontSize: 16 },
+    { text: c.statusLinha, align: 1, bold: true, fontSize: c.isTotalGratis ? 24 : 16 },
+    { text: '--------------------------------', align: 1, fontSize: 8 },
+    { text: `Data: ${c.dataHoraFormatada}`, align: 1, fontSize: 8 },
+    { text: '--------------------------------', align: 1, fontSize: 8 },
+    { text: `SERVICO: ${c.servicoNome.toUpperCase()}`, align: 0, fontSize: 8, bold: true },
+    { text: `ALUNO: ${c.alunoNome.toUpperCase()}`, align: 0, fontSize: 8, bold: true },
+    { text: `CURSO: ${c.alunoCurso.toUpperCase()}`, align: 0, fontSize: 8, bold: true },
+    { text: `MATRICULA: ${c.alunoMatricula}`, align: 0, fontSize: 8, bold: true },
+    { text: '--------------------------------', align: 1, fontSize: 8 },
+    { text: 'Obrigado! Bom apetite.', align: 1, fontSize: 8 },
+  ];
 
-      gertec.finishTransaction(
-        {
-          cut: true,           // tenta cortar (sem efeito prático neste hardware, mas inofensivo)
-          cutMode: 'full',      // guilhotina confirmada no totem — corte total ao final
-          feedLines: 14,        // folga calibrada para o cupom ficar perto de 9cm de comprimento total
-        },
-        () => console.log('[GertecPrinter] Cupom impresso com sucesso.'),
-        onErr
-      );
+  gertec.printReceipt(
+    {
+      lines,
+      cut: true,
+      cutMode: 'full', // guilhotina confirmada no totem
+      feedLines: 19,   // recalibrado a partir da medição real no cupom impresso (14 + ~5 de folga extra)
     },
+    () => console.log('[GertecPrinter] Cupom impresso com sucesso.'),
     onErr
   );
 }

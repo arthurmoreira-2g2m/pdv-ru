@@ -139,7 +139,8 @@ export const TabAlunos: React.FC = () => {
     setLoading(true);
     setImportSummary({ msg: 'Baixando e processando planilha online...' });
 
-    const result = await importarPlanilhaUrl(urlInput.trim());
+    const config = await getConfiguracoes();
+    const result = await importarPlanilhaUrl(urlInput.trim(), config.backendEmailUrl, config.backendEmailApiKey);
     if (result.sucesso && result.alunosValidos.length > 0) {
       const count = await saveAlunosBulk(result.alunosValidos);
       setImportSummary({ 

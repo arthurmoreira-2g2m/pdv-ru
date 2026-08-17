@@ -11,6 +11,16 @@ var GertecPrinter = {
   },
 
   /**
+   * Imprime o cupom inteiro em um único lote (recomendado — evita corrida
+   * entre linhas concorrentes e garante que o corte só acontece depois
+   * que tudo foi realmente impresso).
+   * @param {Object} opts { lines: [{text, align, bold, fontSize, ...}], feedLines, cut, cutMode }
+   */
+  printReceipt: function (opts, success, error) {
+    exec(success, error, PLUGIN_NAME, 'printReceipt', [opts]);
+  },
+
+  /**
    * @param {Object} opts { text, width, height }
    */
   printQRCode: function (opts, success, error) {
